@@ -19,7 +19,8 @@ import AddStatModal from "../components/AddStatModal";
 import StatCard from "../components/StatCard";
 import TodoList from "../components/TodoList";
 import GoalTracker from "../components/GoalTracker";
-import { Plus, MessageCircle, X, Send, Bot, Dumbbell, Utensils } from "lucide-react";
+import { Plus, MessageCircle, X, Send, Bot, Dumbbell, Utensils, TrendingUp, Zap } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useCoach } from "../context/CoachContext.jsx";
 
 const WEEK_DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
@@ -29,6 +30,7 @@ const IOS_INPUT_STYLE = { fontSize: 16 };
 
 export default function Dashboard() {
   const { askCoach, user: ctxUser, plans } = useCoach();
+  const navigate = useNavigate();
 
   const [quote, setQuote] = useState("");
   const [habits, setHabits] = useState([]);
@@ -233,10 +235,10 @@ export default function Dashboard() {
           key={quote}
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 1.2, ease: "easeOut" }}
-          className="mt-6 mb-10 text-center"
+          transition={{ duration: 1.2, ease: “easeOut” }}
+          className=”mt-4 mb-6 text-center px-2”
         >
-          <p className="text-2xl md:text-2xl text-[#f87171] italic font-light leading-relaxed tracking-wide drop-shadow-[0_0_10px_rgba(248,113,113,0.35)]">
+          <p className=”text-base text-[#f87171] italic font-light leading-relaxed tracking-wide drop-shadow-[0_0_10px_rgba(248,113,113,0.35)]”>
             “{quote}”
           </p>
         </motion.div>
@@ -269,6 +271,24 @@ export default function Dashboard() {
             </div>
           );
         })()}
+
+        {/* Quick Actions */}
+        <div className="grid grid-cols-3 gap-2 mb-6">
+          {[
+            { label: "Workout", icon: <Dumbbell size={16} />, to: "/workout", color: "text-red-400 border-red-500/30 bg-red-500/8 hover:bg-red-500/15" },
+            { label: "Meals", icon: <Utensils size={16} />, to: "/meals", color: "text-green-400 border-green-500/30 bg-green-500/8 hover:bg-green-500/15" },
+            { label: "Trades", icon: <TrendingUp size={16} />, to: "/trading", color: "text-blue-400 border-blue-500/30 bg-blue-500/8 hover:bg-blue-500/15" },
+          ].map(({ label, icon, to, color }) => (
+            <button
+              key={to}
+              onClick={() => navigate(to)}
+              className={`flex flex-col items-center gap-1.5 py-3 rounded-2xl border ${color} transition-all`}
+            >
+              {icon}
+              <span className="text-xs font-medium">{label}</span>
+            </button>
+          ))}
+        </div>
 
         {/* Schedule Section */}
         <ScheduleTab />
@@ -354,16 +374,26 @@ export default function Dashboard() {
 
               {/* Daily Completion Tracker */}
               <div className="mt-6">
-                <p className="text-sm text-gray-400 mb-1 text-center">
-                  Daily Completion:{" "}
-                  <span className="text-yellow-400 font-semibold">{completedCount}</span>/
-                  <span className="text-yellow-400 font-semibold">{habits.length}</span>
-                </p>
-                <div className="w-full bg-[#222] h-2 rounded-full overflow-hidden">
+                <div className="flex items-center justify-between mb-1.5">
+                  <p className="text-sm text-gray-400">
+                    Today's progress
+                  </p>
+                  <div className="flex items-center gap-1.5">
+                    {percentDone === 100 && (
+                      <span className="flex items-center gap-1 text-xs text-yellow-400 font-semibold">
+                        <Zap size={12} /> All done!
+                      </span>
+                    )}
+                    <span className="text-sm text-yellow-400 font-semibold">
+                      {completedCount}/{habits.length}
+                    </span>
+                  </div>
+                </div>
+                <div className="w-full bg-[#222] h-2.5 rounded-full overflow-hidden">
                   <motion.div
                     animate={{ width: `${percentDone}%` }}
                     transition={{ duration: 0.6 }}
-                    className="h-2 bg-gradient-to-r from-yellow-400 to-yellow-300 rounded-full"
+                    className={`h-2.5 rounded-full ${percentDone === 100 ? "bg-gradient-to-r from-yellow-400 to-green-400" : "bg-gradient-to-r from-yellow-400 to-yellow-300"}`}
                   />
                 </div>
               </div>
@@ -395,7 +425,7 @@ export default function Dashboard() {
       <button
         aria-label="Open Coach"
         onClick={() => setChatOpen(true)}
-        className="fixed left-4 bottom-20 md:bottom-6 z-50 rounded-full p-3 bg-yellow-400 text-black shadow-lg shadow-yellow-400/20 border border-yellow-500 hover:bg-yellow-300 transition"
+        className="fixed right-4 bottom-24 z-50 rounded-full p-3 bg-yellow-400 text-black shadow-lg shadow-yellow-400/20 border border-yellow-500 hover:bg-yellow-300 transition"
       >
         <MessageCircle size={22} />
       </button>

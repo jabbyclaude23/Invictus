@@ -118,11 +118,16 @@ export default function Meals() {
 
   useEffect(() => {
     const unsub = auth.onAuthStateChanged(async u => {
-      if (!u) return;
-      const snap = await getDoc(doc(db, "users", u.uid, "meal_setup", "info"));
-      if (snap.exists()) setMealSetup(snap.data());
-      setSetupLoading(false);
-      await loadTodayMeals(u);
+      if (!u) { setSetupLoading(false); return; }
+      try {
+        const snap = await getDoc(doc(db, "users", u.uid, "meal_setup", "info"));
+        if (snap.exists()) setMealSetup(snap.data());
+        await loadTodayMeals(u);
+      } catch (e) {
+        console.error("Failed to load meal setup:", e);
+      } finally {
+        setSetupLoading(false);
+      }
     });
     return unsub;
   }, []);
