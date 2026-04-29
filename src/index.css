@@ -1,0 +1,146 @@
+@import "@fontsource/poppins/400.css";
+@import "@fontsource/poppins/600.css";
+@import "@fontsource/orbitron/700.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-dark text-white font-sans;
+}
+@keyframes glowPulse {
+  0%, 100% {
+    opacity: 0.15;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(1.05);
+  }
+}
+
+.glow-bg {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 400px;
+  height: 400px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  animation: glowPulse 6s ease-in-out infinite;
+  filter: blur(80px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Page-specific glow colors */
+.glow-dashboard {
+  background: radial-gradient(circle, rgba(212,175,55,0.25) 0%, transparent 70%);
+}
+
+.glow-workout {
+  background: radial-gradient(circle, rgba(255,0,72,0.25) 0%, transparent 70%);
+}
+
+.glow-meals {
+  background: radial-gradient(circle, rgba(0,255,100,0.25) 0%, transparent 70%);
+}
+
+.glow-trading {
+  background: radial-gradient(circle, rgba(0,150,255,0.25) 0%, transparent 70%);
+}
+
+.glow-coach {
+  background: radial-gradient(circle, rgba(255,165,0,0.25) 0%, transparent 70%);
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-up {
+  animation: fadeUp 1.2s ease forwards;
+}
+@keyframes pulseGlow {
+  0%, 100% {
+    opacity: 0.6;
+    transform: scaleX(0.95);
+  }
+  50% {
+    opacity: 1;
+    transform: scaleX(1.05);
+  }
+}
+a:hover {
+  transition: color 0.3s ease;
+}
+
+a:hover svg {
+  transform: translateY(-1px);
+  transition: transform 0.2s ease;
+}
+
+.nav-active {
+  position: relative;
+  color: #D4AF37; /* Elegant gold tone */
+}
+.nav-active {
+  color: #D4AF37;
+  filter: drop-shadow(0 0 6px rgba(212,175,55,0.6));
+  transition: all 0.3s ease-in-out;
+}
+
+.nav-inactive {
+  color: #9ca3af; /* Gray-400 */
+  transition: all 0.3s ease-in-out;
+}
+
+.nav-inactive:hover {
+  color: #D4AF37;
+  filter: drop-shadow(0 0 4px rgba(212,175,55,0.3));
+}
+@keyframes glowPulseSoft {
+  0%, 100% {
+    filter: drop-shadow(0 0 5px rgba(212,175,55,0.4));
+  }
+  50% {
+    filter: drop-shadow(0 0 8px rgba(212,175,55,0.8));
+  }
+}
+
+.nav-active {
+  color: #D4AF37;
+  animation: glowPulseSoft 3s ease-in-out infinite;
+}
+
+.nav-glass {
+  background: linear-gradient(180deg, rgba(20,20,20,0.6) 0%, rgba(10,10,10,0.9) 100%);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 0 -1px 10px rgba(212, 175, 55, 0.05);
+}
+.nav-glass {
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+    .safe-area-inset-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* ensures scrolling adjusts when keyboard opens */
+@supports (-webkit-touch-callout: none) {
+  body {
+    height: -webkit-fill-available;
+  }
+}
+textarea,
+input {
+  font-size: 16px !important; /* stop iPhone zoom on focus */
+}
