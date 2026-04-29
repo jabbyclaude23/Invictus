@@ -145,22 +145,24 @@ export default function Coach() {
       if (latest && within12h) {
         setActiveId(latest.id);
       } else if (!latest || !within12h) {
-        // create a new one
-        const ref = await addDoc(collection(db, "users", user.uid, "coach_sessions"), {
-          title: "Active Session",
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-        setActiveId(ref.id);
-        // seed welcome message
-        await addDoc(collection(db, "users", user.uid, "coach_sessions", ref.id, "messages"), {
-          role: "assistant",
-          content: `Welcome back ${user.displayName || "Jabran"} — let's lock in. What do you want to focus on today?`,
-          createdAt: serverTimestamp(),
-        });
-        await updateDoc(doc(db, "users", user.uid, "coach_sessions", ref.id), {
-          updatedAt: serverTimestamp(),
-        });
+        try {
+          const ref = await addDoc(collection(db, "users", user.uid, "coach_sessions"), {
+            title: "Active Session",
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+          setActiveId(ref.id);
+          await addDoc(collection(db, "users", user.uid, "coach_sessions", ref.id, "messages"), {
+            role: "assistant",
+            content: `Welcome back ${user.displayName || "Champion"} — let's lock in. What do you want to focus on today?`,
+            createdAt: serverTimestamp(),
+          });
+          await updateDoc(doc(db, "users", user.uid, "coach_sessions", ref.id), {
+            updatedAt: serverTimestamp(),
+          });
+        } catch (e) {
+          console.error("Failed to create coach session:", e);
+        }
       }
     });
     return unsub;

@@ -55,10 +55,15 @@ export default function Workout() {
   // Load user profile
   useEffect(() => {
     const unsub = auth.onAuthStateChanged(async u => {
-      if (!u) return;
-      const snap = await getDoc(doc(db, "users", u.uid, "profile", "info"));
-      if (snap.exists()) setProfile(snap.data());
-      setProfileLoading(false);
+      if (!u) { setProfileLoading(false); return; }
+      try {
+        const snap = await getDoc(doc(db, "users", u.uid, "profile", "info"));
+        if (snap.exists()) setProfile(snap.data());
+      } catch (e) {
+        console.error("Failed to load workout profile:", e);
+      } finally {
+        setProfileLoading(false);
+      }
     });
     return unsub;
   }, []);
