@@ -235,11 +235,11 @@ export default function Dashboard() {
           key={quote}
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 1.2, ease: “easeOut” }}
-          className=”mt-4 mb-6 text-center px-2”
+          transition={{ duration: 1.2, ease: "easeOut" }}
+          className="mt-4 mb-6 text-center px-2"
         >
-          <p className=”text-base text-[#f87171] italic font-light leading-relaxed tracking-wide drop-shadow-[0_0_10px_rgba(248,113,113,0.35)]”>
-            “{quote}”
+          <p className="text-base text-[#f87171] italic font-light leading-relaxed tracking-wide drop-shadow-[0_0_10px_rgba(248,113,113,0.35)]">
+            "{quote}"
           </p>
         </motion.div>
 
@@ -308,7 +308,7 @@ export default function Dashboard() {
 
           {stats.length === 0 ? (
             <p className="text-sm text-gray-500 italic">
-              No stats yet — click “Add Stat” to start tracking.
+              No stats yet — click "Add Stat" to start tracking.
             </p>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 w-full">
@@ -342,7 +342,7 @@ export default function Dashboard() {
 
           {habits.length === 0 ? (
             <p className="text-sm text-gray-500 italic">
-              No habits yet — click “Add Habit” to start tracking.
+              No habits yet — click "Add Habit" to start tracking.
             </p>
           ) : (
             <div className="space-y-3">
