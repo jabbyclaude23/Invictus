@@ -3,14 +3,19 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ChevronRight, ChevronLeft, Dumbbell } from "lucide-react";
 
 const STEPS = [
-  { key:"age",        label:"How old are you?",                  type:"number", placeholder:"e.g. 25", unit:"years" },
-  { key:"weight",     label:"What's your current weight?",        type:"number", placeholder:"e.g. 80", unit:"kg" },
-  { key:"height",     label:"What's your height?",               type:"number", placeholder:"e.g. 178", unit:"cm" },
-  { key:"sex",        label:"Biological sex",                    type:"select", options:["Male","Female"] },
-  { key:"experience", label:"Training experience level",         type:"select", options:["Beginner (< 1 year)","Intermediate (1–3 years)","Advanced (3+ years)"] },
-  { key:"goal",       label:"Primary goal",                      type:"select", options:["Build Muscle","Lose Fat","Build Muscle & Lose Fat","Improve Fitness"] },
-  { key:"days",       label:"Days per week you can train",        type:"select", options:["2 days","3 days","4 days","5 days","6 days"] },
-  { key:"timeline",   label:"How long do you want your program?", type:"select", options:["4 weeks","8 weeks","12 weeks","16 weeks"] },
+  { key:"age",         label:"How old are you?",                      type:"number",        placeholder:"e.g. 25",  unit:"years" },
+  { key:"weight",      label:"What's your current weight?",            type:"number",        placeholder:"e.g. 80",  unit:"kg" },
+  { key:"height",      label:"What's your height?",                   type:"number",        placeholder:"e.g. 178", unit:"cm" },
+  { key:"sex",         label:"Biological sex",                        type:"select",        options:["Male","Female"] },
+  { key:"experience",  label:"Training experience level",             type:"select",        options:["Beginner (< 1 year)","Intermediate (1–3 years)","Advanced (3+ years)"] },
+  { key:"goal",        label:"Primary goal",                          type:"select",        options:["Build Muscle","Lose Fat","Build Muscle & Lose Fat","Improve Fitness"] },
+  { key:"days",        label:"Days per week you can train",            type:"select",        options:["2 days","3 days","4 days","5 days","6 days"] },
+  { key:"duration",    label:"How long can each workout be?",          type:"select",        options:["30 minutes","45 minutes","60 minutes","75+ minutes"] },
+  { key:"location",    label:"Where do you work out?",                 type:"select",        options:["Gym","Home","Both"] },
+  { key:"equipment",   label:"What equipment do you have access to?",  type:"multiselect",   options:["Dumbbells","Kettlebells","Barbells","Cables / Machines","Resistance Bands","Bodyweight Only"] },
+  { key:"targetAreas", label:"Any areas you want to focus on?",        type:"multiselect",   options:["Chest","Back","Shoulders","Arms","Legs","Glutes","Core"], optional:true },
+  { key:"injuries",    label:"Any injuries or movements to avoid?",    type:"text_optional", placeholder:"e.g. bad knees, no overhead press" },
+  { key:"timeline",    label:"How long do you want your program?",     type:"select",        options:["4 weeks","8 weeks","12 weeks","16 weeks"] },
 ];
 
 export default function WorkoutOnboarding({ onComplete, loading }) {
@@ -18,14 +23,27 @@ export default function WorkoutOnboarding({ onComplete, loading }) {
   const [form, setForm] = useState({});
 
   const current = STEPS[step];
-  const val = form[current.key] || "";
-  const isLast = step === STEPS.length - 1;
-  const canNext = !!val;
+  const isMulti    = current.type === "multiselect";
+  const isOptional = current.optional || current.type === "text_optional";
+  const isLast     = step === STEPS.length - 1;
+
+  const scalarVal = form[current.key] || "";
+  const multiVal  = Array.isArray(form[current.key]) ? form[current.key] : [];
+  const canNext   = isOptional ? true : (isMulti ? multiVal.length > 0 : !!scalarVal);
 
   const next = () => {
     if (!canNext) return;
     if (isLast) { onComplete(form); return; }
     setStep(s => s + 1);
+  };
+
+  const toggleMulti = (opt) => {
+    const key = current.key;
+    setForm(f => {
+      const curr = Array.isArray(f[key]) ? f[key] : [];
+      const next = curr.includes(opt) ? curr.filter(x => x !== opt) : [...curr, opt];
+      return { ...f, [key]: next };
+    });
   };
 
   const handleKey = e => { if (e.key === "Enter" && canNext) next(); };
@@ -70,16 +88,17 @@ export default function WorkoutOnboarding({ onComplete, loading }) {
             exit={{ opacity: 0, x: -30 }}
             transition={{ duration: 0.2 }}
           >
-            <h2 className="text-2xl font-bold text-white mb-6">{current.label}</h2>
+            <h2 className="text-2xl font-bold text-white mb-2">{current.label}</h2>
+            {isOptional && <p className="text-xs text-gray-500 mb-4">Optional — tap Next to skip</p>}
 
-            {current.type === "select" ? (
-              <div className="space-y-3">
+            {current.type === "select" && (
+              <div className="space-y-3 mt-4">
                 {current.options.map(opt => (
                   <button
                     key={opt}
-                    onClick={() => { setForm(f => ({ ...f, [current.key]: opt })); }}
+                    onClick={() => setForm(f => ({ ...f, [current.key]: opt }))}
                     className={`w-full text-left px-4 py-3 rounded-xl border text-sm transition-all ${
-                      val === opt
+                      scalarVal === opt
                         ? "bg-red-500/15 border-red-500 text-white"
                         : "bg-[#111] border-white/5 text-gray-400 hover:border-red-500/40"
                     }`}
@@ -88,11 +107,31 @@ export default function WorkoutOnboarding({ onComplete, loading }) {
                   </button>
                 ))}
               </div>
-            ) : (
-              <div className="relative">
+            )}
+
+            {current.type === "multiselect" && (
+              <div className="flex flex-wrap gap-2 mt-4">
+                {current.options.map(opt => (
+                  <button
+                    key={opt}
+                    onClick={() => toggleMulti(opt)}
+                    className={`px-4 py-2 rounded-xl border text-sm transition-all ${
+                      multiVal.includes(opt)
+                        ? "bg-red-500/15 border-red-500 text-white"
+                        : "bg-[#111] border-white/5 text-gray-400 hover:border-red-500/40"
+                    }`}
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {current.type === "number" && (
+              <div className="relative mt-4">
                 <input
-                  type={current.type}
-                  value={val}
+                  type="number"
+                  value={scalarVal}
                   onChange={e => setForm(f => ({ ...f, [current.key]: e.target.value }))}
                   onKeyDown={handleKey}
                   placeholder={current.placeholder}
@@ -102,6 +141,20 @@ export default function WorkoutOnboarding({ onComplete, loading }) {
                 {current.unit && (
                   <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-gray-500">{current.unit}</span>
                 )}
+              </div>
+            )}
+
+            {current.type === "text_optional" && (
+              <div className="relative mt-4">
+                <input
+                  type="text"
+                  value={scalarVal}
+                  onChange={e => setForm(f => ({ ...f, [current.key]: e.target.value }))}
+                  onKeyDown={handleKey}
+                  placeholder={current.placeholder}
+                  autoFocus
+                  className="w-full bg-[#111] border border-white/10 rounded-xl px-4 py-3 text-white text-base focus:outline-none focus:border-red-500"
+                />
               </div>
             )}
           </motion.div>

@@ -18,29 +18,39 @@ export default function Trading() {
 
   useEffect(() => {
     const unsub = auth.onAuthStateChanged(async u => {
-      if (!u) return;
-      const q = query(collection(db, "users", u.uid, "trading"), orderBy("createdAt", "desc"));
+      if (!u) { setLoading(false); return; }
       try {
-        const snap = await getDocs(q);
-        setTrades(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-      } catch {
-        const snap = await getDocs(collection(db, "users", u.uid, "trading"));
-        setTrades(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        const q = query(collection(db, "users", u.uid, "trading"), orderBy("createdAt", "desc"));
+        try {
+          const snap = await getDocs(q);
+          setTrades(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        } catch {
+          const snap = await getDocs(collection(db, "users", u.uid, "trading"));
+          setTrades(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        }
+      } catch (e) {
+        console.error("Failed to load trades:", e);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     });
     return unsub;
   }, []);
 
   const handleSave = async (tradeData) => {
     const u = auth.currentUser;
-    if (!u) return;
-    const ref = await addDoc(collection(db, "users", u.uid, "trading"), {
-      ...tradeData,
-      time: new Date(),
-      createdAt: new Date(),
-    });
-    setTrades(prev => [{ id: ref.id, ...tradeData, createdAt: new Date() }, ...prev]);
+    if (!u) { alert("Not signed in"); return; }
+    try {
+      const ref = await addDoc(collection(db, "users", u.uid, "trading"), {
+        ...tradeData,
+        time: new Date(),
+        createdAt: new Date(),
+      });
+      setTrades(prev => [{ id: ref.id, ...tradeData, createdAt: new Date() }, ...prev]);
+    } catch (e) {
+      console.error("Trade save error:", e?.message, e?.code);
+      alert(`Trade save failed: ${e?.code === "permission-denied" ? "Firestore rules expired — update in Firebase Console" : e?.message}`);
+    }
   };
 
   const handleDelete = async (id) => {
@@ -53,12 +63,12 @@ export default function Trading() {
 
   const getAiFeedback = async (trade) => {
     setAiLoading(trade.id);
-    const msg = `Review this trade and give concise feedback (3-4 sentences max):
-Symbol: ${trade.symbol} | Side: ${trade.side} | Entry: ${trade.entry} | Exit: ${trade.exit || "open"} | Size: ${trade.size} | PnL: ${trade.pnl}
-Setup: ${trade.setup || "not specified"}
+    const msg = `Review this futures trade and give concise feedback (3-4 sentences max):
+Symbol: ${trade.symbol} | Side: ${trade.side} | Entry: ${trade.entry} | Exit: ${trade.exit || "open"} | Contracts: ${trade.contracts || trade.size || 1} | P&L: $${trade.pnl}
+Rules followed: ${trade.setup || "not specified"}
 Notes: ${trade.notes || "none"}
 
-Focus on: execution quality, risk management, and one thing to improve.`;
+Focus on: rule adherence, execution quality, and one improvement.`;
     const reply = await askCoach({ messages: [{ role: "user", content: msg }], topic: "trading" });
     setAiFeedback(prev => ({ ...prev, [trade.id]: reply }));
     setAiLoading(null);
@@ -130,7 +140,7 @@ Focus on: execution quality, risk management, and one thing to improve.`;
 
                     {/* PnL */}
                     <span className={`text-sm font-bold ${win ? "text-green-400" : flat ? "text-gray-400" : "text-red-400"}`}>
-                      {(trade.pnl || 0) >= 0 ? "+" : ""}{trade.pnl || 0}
+                      {(trade.pnl || 0) >= 0 ? "+" : ""}${Math.abs(trade.pnl || 0).toLocaleString()}
                     </span>
 
                     {/* Expand icon */}
@@ -149,7 +159,7 @@ Focus on: execution quality, risk management, and one thing to improve.`;
                         <div className="px-4 pb-4 border-t border-white/5 space-y-3">
                           {/* Entry / Exit */}
                           <div className="grid grid-cols-3 gap-2 mt-3">
-                            {[["Entry", trade.entry],["Exit", trade.exit || "—"],["Size", trade.size || "—"]].map(([l,v]) => (
+                            {[["Entry", trade.entry],["Exit", trade.exit || "—"],["Contracts", trade.contracts || trade.size || "—"]].map(([l,v]) => (
                               <div key={l} className="bg-[#1a1a1a] rounded-xl p-2.5 text-center">
                                 <p className="text-sm font-bold text-white">{v}</p>
                                 <p className="text-xs text-gray-600">{l}</p>

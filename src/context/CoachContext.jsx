@@ -33,9 +33,22 @@ export function CoachProvider({ children }) {
   useEffect(() => {
     if (!user) return;
     const unsubs = [];
+
+    const errHandler = (name) => (err) => {
+      console.warn(`[CoachContext] ${name} snapshot error:`, err?.code, err?.message);
+    };
+
     const col = (name, setter) => {
-      const q = query(collection(db, "users", user.uid, name), orderBy("createdAt","desc"), limit(200));
-      unsubs.push(onSnapshot(q, snap => setter(snap.docs.map(d => ({ id: d.id, ...d.data() })))));
+      // Use getDocs fallback if onSnapshot fails (e.g. expired rules)
+      try {
+        const q = query(collection(db, "users", user.uid, name), orderBy("createdAt","desc"), limit(200));
+        unsubs.push(onSnapshot(q,
+          snap => setter(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+          errHandler(name)
+        ));
+      } catch (e) {
+        console.warn(`[CoachContext] failed to subscribe to ${name}:`, e?.message);
+      }
     };
     col("stats",    v => setRaw(p => ({ ...p, stats: v })));
     col("habits",   v => setRaw(p => ({ ...p, habits: v })));
@@ -46,8 +59,14 @@ export function CoachProvider({ children }) {
     // single-doc plan subscriptions
     const wpRef = doc(db, "users", user.uid, "workout_plan", "current");
     const mpRef = doc(db, "users", user.uid, "meal_plan", "current");
-    unsubs.push(onSnapshot(wpRef, snap => setPlans(p => ({ ...p, workout: snap.exists() ? snap.data() : null }))));
-    unsubs.push(onSnapshot(mpRef, snap => setPlans(p => ({ ...p, meal:    snap.exists() ? snap.data() : null }))));
+    unsubs.push(onSnapshot(wpRef,
+      snap => setPlans(p => ({ ...p, workout: snap.exists() ? snap.data() : null })),
+      errHandler("workout_plan")
+    ));
+    unsubs.push(onSnapshot(mpRef,
+      snap => setPlans(p => ({ ...p, meal: snap.exists() ? snap.data() : null })),
+      errHandler("meal_plan")
+    ));
 
     setReady(true);
     return () => unsubs.forEach(u => u());

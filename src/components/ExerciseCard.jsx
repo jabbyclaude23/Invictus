@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronDown, ChevronUp, RefreshCw, BarChart3, CheckCircle } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
-import { MUSCLE_COLORS, MUSCLE_BG, getAlternatives } from "../data/exercises";
+import { MUSCLE_COLORS, MUSCLE_BG, getAlternatives, getSameMuscleAlts } from "../data/exercises";
 
 const IMG_CACHE = {};
 
@@ -29,7 +29,11 @@ export default function ExerciseCard({ exercise, history = [], onLog, onSwap }) 
   const [sets, setSets]         = useState([{ reps: "", weight: "" }]);
   const [done, setDone]         = useState(false);
 
-  const alts = getAlternatives(exercise);
+  // Named alts first; fall back to all same-muscle exercises so AI-generated names always get options
+  const namedAlts = getAlternatives(exercise);
+  const alts = namedAlts.length > 0
+    ? namedAlts
+    : getSameMuscleAlts(exercise.muscle, exercise.name).slice(0, 5);
   const muscleColor = MUSCLE_COLORS[exercise.muscle] || "text-gray-400";
   const muscleBg    = MUSCLE_BG[exercise.muscle]    || "bg-gray-400/10 border-gray-400/20";
 
@@ -163,6 +167,26 @@ export default function ExerciseCard({ exercise, history = [], onLog, onSwap }) 
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
           >
+            {img && (
+              <div className="mx-4 mt-3 rounded-xl overflow-hidden h-44 bg-[#1a1a1a]">
+                <img src={img} alt={exercise.name} className="w-full h-full object-cover" />
+              </div>
+            )}
+            {(exercise.desc || exercise.weight_suggestion) && (
+              <div className="mt-3 mb-1 space-y-1.5">
+                {exercise.desc && (
+                  <div>
+                    <p className="text-xs text-gray-600 uppercase tracking-wider mb-0.5">Instructions</p>
+                    <p className="text-xs text-gray-400 leading-relaxed">{exercise.desc}</p>
+                  </div>
+                )}
+                {exercise.weight_suggestion && (
+                  <p className="text-xs text-yellow-400/80 bg-yellow-400/5 border border-yellow-400/15 rounded-lg px-2.5 py-1.5">
+                    💡 {exercise.weight_suggestion}
+                  </p>
+                )}
+              </div>
+            )}
             <p className="text-xs text-gray-500 mt-3 mb-2">Log your sets</p>
             <div className="space-y-2">
               {sets.map((s, i) => (

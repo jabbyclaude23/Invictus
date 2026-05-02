@@ -6,8 +6,16 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
+html, body {
   @apply bg-dark text-white font-sans;
+  overflow-x: hidden;
+  width: 100%;
+  max-width: 100vw;
+  position: relative;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
 }
 @keyframes glowPulse {
   0%, 100% {

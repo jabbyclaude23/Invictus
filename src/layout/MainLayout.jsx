@@ -39,43 +39,7 @@ export default function MainLayout() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, [lastScrollY]);
 
-  // 📱 Swipe Navigation
-  useEffect(() => {
-    let startX = 0;
-    let startY = 0;
-    let deltaX = 0;
-    let deltaY = 0;
-    let isSwiping = false;
-
-    const handleTouchStart = (e) => {
-      startX = e.touches[0].clientX;
-      startY = e.touches[0].clientY;
-      isSwiping = false;
-    };
-
-    const handleTouchMove = (e) => {
-      deltaX = e.touches[0].clientX - startX;
-      deltaY = e.touches[0].clientY - startY;
-      if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 90) isSwiping = true;
-    };
-
-    const handleTouchEnd = (e) => {
-      if (!isSwiping) return;
-      const currentIndex = tabs.findIndex((t) => t.to === location.pathname);
-      const direction = e.changedTouches[0].clientX < startX ? 1 : -1;
-      const nextTab = tabs[currentIndex + direction];
-      if (nextTab) navigate(nextTab.to);
-    };
-
-    window.addEventListener("touchstart", handleTouchStart);
-    window.addEventListener("touchmove", handleTouchMove);
-    window.addEventListener("touchend", handleTouchEnd);
-    return () => {
-      window.removeEventListener("touchstart", handleTouchStart);
-      window.removeEventListener("touchmove", handleTouchMove);
-      window.removeEventListener("touchend", handleTouchEnd);
-    };
-  }, [location.pathname]);
+  // Swipe navigation removed — tap the bottom nav instead
 
   // Hide nav when on Coach screen
   const isCoach = location.pathname.includes("/coach");
@@ -111,9 +75,10 @@ export default function MainLayout() {
       {/* Bottom Nav */}
       {!isCoach && (
         <nav
-          className={`fixed bottom-0 left-0 w-full flex justify-around py-3 transition-transform duration-500 backdrop-blur-md bg-[#0b0b0b]/70 border-t border-[#222] ${
+          className={`fixed bottom-0 left-0 w-full flex justify-around pt-3 z-30 transition-transform duration-500 backdrop-blur-md bg-[#0b0b0b]/70 border-t border-[#222] ${
             hideNav ? "translate-y-full" : "translate-y-0"
           }`}
+          style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}
         >
           {tabs.map((tab) => (
             <NavLink
