@@ -10,6 +10,11 @@ import MealLogModal from "../components/MealLogModal";
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const WEEK_DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 const todayDay = () => WEEK_DAYS[new Date().getDay()];
+const MEAL_ORDER = ["Breakfast","Pre-workout","Lunch","Snack","Post-workout","Dinner"];
+const sortMeals = meals => [...meals].sort((a, b) => {
+  const ai = MEAL_ORDER.indexOf(a.mealType); const bi = MEAL_ORDER.indexOf(b.mealType);
+  return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+});
 
 // AI calculates calories/protein — user never enters raw numbers
 const MEAL_PLAN_PROMPT = `You are a certified nutritionist. Generate a personalized 7-day meal plan as JSON only. No text before or after.
@@ -257,12 +262,14 @@ export default function Meals() {
   const handleAddMeal = async (mealData) => {
     const u = auth.currentUser;
     if (!u) return;
-    const docRef = await addDoc(collection(db, "users", u.uid, "meals"), {
+    const entry = {
       ...mealData,
       date: todayStr(),
+      dayName: todayDay(),
       createdAt: new Date(),
-    });
-    setLoggedMeals(prev => [...prev, { id: docRef.id, ...mealData, date: todayStr() }]);
+    };
+    const docRef = await addDoc(collection(db, "users", u.uid, "meals"), entry);
+    setLoggedMeals(prev => sortMeals([...prev, { id: docRef.id, ...entry }]));
   };
 
   const handleDeleteMeal = async (id) => {
@@ -400,7 +407,10 @@ export default function Meals() {
         {/* Today's Logged Meals */}
         <div className="bg-[#111] border border-white/5 rounded-2xl p-4 mb-4">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-white">Today's Log</h2>
+            <div>
+              <h2 className="text-sm font-semibold text-white">Today's Log</h2>
+              <p className="text-xs text-gray-600 mt-0.5">{todayDay()}</p>
+            </div>
             <button
               onClick={() => { setPrefillMeal(null); setShowModal(true); }}
               className="flex items-center gap-1.5 text-xs bg-green-500/15 text-green-400 border border-green-500/30 px-3 py-1.5 rounded-lg hover:bg-green-500/25 transition"
@@ -411,20 +421,30 @@ export default function Meals() {
           {loggedMeals.length === 0 ? (
             <p className="text-sm text-gray-600 italic">No meals logged yet today.</p>
           ) : (
-            <div className="space-y-2">
-              {loggedMeals.map(m => (
+            <div className="space-y-1.5">
+              {sortMeals(loggedMeals).map(m => (
                 <div key={m.id} className="flex items-start justify-between bg-[#1a1a1a] rounded-xl px-3 py-2.5">
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-white">{m.name}</p>
-                    {m.ingredients && <p className="text-xs text-gray-600 mt-0.5 truncate">{m.ingredients}</p>}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {m.mealType && (
+                        <span className="text-xs font-semibold text-green-400">{m.mealType}</span>
+                      )}
+                      {m.name && m.name !== m.mealType && (
+                        <span className="text-xs text-gray-400">— {m.name}</span>
+                      )}
+                      <span className="text-xs text-gray-700">{m.dayName || todayDay()}</span>
+                    </div>
+                    {m.ingredients && (
+                      <p className="text-xs text-gray-600 mt-0.5 line-clamp-1">{m.ingredients}</p>
+                    )}
                     <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                      {m.calories > 0 && <span className="text-xs text-gray-400">{m.calories} kcal</span>}
+                      {m.calories > 0 && <span className="text-xs text-gray-300 font-medium">{m.calories} kcal</span>}
                       {m.protein  > 0 && <span className="text-xs text-green-400">{m.protein}g P</span>}
                       {m.carbs    > 0 && <span className="text-xs text-blue-400">{m.carbs}g C</span>}
                       {m.fat      > 0 && <span className="text-xs text-amber-400">{m.fat}g F</span>}
                     </div>
                   </div>
-                  <button onClick={() => handleDeleteMeal(m.id)} className="ml-3 text-gray-600 hover:text-red-400 transition flex-shrink-0">
+                  <button onClick={() => handleDeleteMeal(m.id)} className="ml-3 text-gray-600 hover:text-red-400 transition flex-shrink-0 mt-0.5">
                     <Trash2 size={14} />
                   </button>
                 </div>
