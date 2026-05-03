@@ -320,6 +320,19 @@ export default function Workout() {
   if (view === "active") return (
     <div className="min-h-screen bg-black pb-28 px-4 pt-6">
       <div className="glow-bg glow-workout" />
+
+      {/* Exercise detail modal — active view */}
+      <AnimatePresence>
+        {detailExercise && (
+          <ExerciseDetailModal
+            exercise={detailExercise}
+            onClose={() => setDetailExercise(null)}
+            onSwap={(newEx) => { handleSwap(detailExercise.name, newEx); setDetailExercise(null); }}
+            onLog={handleLog}
+          />
+        )}
+      </AnimatePresence>
+
       <motion.div className="relative z-10 max-w-lg mx-auto" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
 
         <div className="flex items-center justify-between mb-6">
@@ -343,6 +356,7 @@ export default function Workout() {
               history={history[ex.name] || []}
               onLog={handleLog}
               onSwap={handleSwap}
+              onDetail={(e) => setDetailExercise(e)}
             />
           ))}
         </div>

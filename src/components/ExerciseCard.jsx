@@ -21,7 +21,7 @@ async function fetchWgerImage(name) {
   } catch { IMG_CACHE[name] = null; return null; }
 }
 
-export default function ExerciseCard({ exercise, history = [], onLog, onSwap }) {
+export default function ExerciseCard({ exercise, history = [], onLog, onSwap, onDetail }) {
   const [img, setImg]           = useState(null);
   const [expanded, setExpanded] = useState(false);
   const [showChart, setShowChart]= useState(false);
@@ -59,7 +59,7 @@ export default function ExerciseCard({ exercise, history = [], onLog, onSwap }) 
       {/* Header row */}
       <div
         className="flex items-center gap-3 p-4 cursor-pointer"
-        onClick={() => setExpanded(e => !e)}
+        onClick={() => onDetail?.(exercise)}
       >
         {/* Image or placeholder */}
         <div className="w-14 h-14 rounded-xl overflow-hidden bg-[#1a1a1a] flex-shrink-0">
@@ -100,7 +100,9 @@ export default function ExerciseCard({ exercise, history = [], onLog, onSwap }) 
           >
             <RefreshCw size={16} />
           </button>
-          {expanded ? <ChevronUp size={16} className="text-gray-500" /> : <ChevronDown size={16} className="text-gray-500" />}
+          <button onClick={e => { e.stopPropagation(); setExpanded(v => !v); }} className="p-1 -mr-1">
+            {expanded ? <ChevronUp size={16} className="text-gray-500" /> : <ChevronDown size={16} className="text-gray-500" />}
+          </button>
         </div>
       </div>
 
