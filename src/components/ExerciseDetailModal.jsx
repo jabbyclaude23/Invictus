@@ -142,11 +142,18 @@ export default function ExerciseDetailModal({ exercise, onClose, onSwap, onLog }
   return (
     <AnimatePresence>
       <motion.div
-        className="fixed inset-0 z-50 bg-black overflow-y-auto flex flex-col"
-        initial={{ opacity: 0, y: 40 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: 40 }}
-        transition={{ type: "spring", damping: 30, stiffness: 320 }}
+        className="fixed inset-0 z-50 bg-black flex flex-col"
+        initial={{ x: "100%" }}
+        animate={{ x: 0 }}
+        exit={{ x: "100%" }}
+        transition={{ type: "spring", damping: 32, stiffness: 300 }}
+        drag="x"
+        dragDirectionLock
+        dragConstraints={{ left: 0, right: 0 }}
+        dragElastic={{ left: 0, right: 0.4 }}
+        onDragEnd={(_, info) => {
+          if (info.offset.x > 80 || info.velocity.x > 400) onClose();
+        }}
       >
         {/* Sticky header */}
         <div className="sticky top-0 bg-black/95 backdrop-blur z-10 flex items-center justify-between px-4 pt-safe pt-5 pb-3 border-b border-white/5">
@@ -160,6 +167,7 @@ export default function ExerciseDetailModal({ exercise, onClose, onSwap, onLog }
             {muscle}
           </span>
         </div>
+        <div className="overflow-y-auto flex-1">
 
         <div className="px-4 pb-32 max-w-lg mx-auto w-full space-y-4 pt-4">
 
@@ -376,6 +384,7 @@ export default function ExerciseDetailModal({ exercise, onClose, onSwap, onLog }
             </div>
           )}
 
+        </div>
         </div>
       </motion.div>
     </AnimatePresence>

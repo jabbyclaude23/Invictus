@@ -166,12 +166,41 @@ export default function Workout() {
     load();
   }, [view, exercises]);
 
-  // ── Elapsed timer ───────────────────────────────────────────────────────
+  // ── Restore active workout from sessionStorage (survives tab navigation) ──
   useEffect(() => {
-    if (view !== "active" || !workoutStartTime) return;
+    try {
+      const saved = sessionStorage.getItem("invictus_active_workout");
+      if (saved) {
+        const { startTime, exercises: savedEx, loggedSets: savedLog } = JSON.parse(saved);
+        if (startTime && savedEx?.length) {
+          setWorkoutStartTime(startTime);
+          setExercises(savedEx);
+          setLoggedSets(savedLog || {});
+          setIsWorkoutPaused(true);
+          setElapsed(Math.floor((Date.now() - startTime) / 1000));
+        }
+      }
+    } catch {}
+  }, []);
+
+  // ── Persist active workout to sessionStorage whenever state changes ────────
+  useEffect(() => {
+    if (!workoutStartTime || !exercises.length) return;
+    try {
+      sessionStorage.setItem("invictus_active_workout", JSON.stringify({
+        startTime: workoutStartTime,
+        exercises,
+        loggedSets,
+      }));
+    } catch {}
+  }, [workoutStartTime, exercises, loggedSets]);
+
+  // ── Elapsed timer — runs whenever there is an active workout ─────────────
+  useEffect(() => {
+    if (!workoutStartTime) return;
     const id = setInterval(() => setElapsed(Math.floor((Date.now() - workoutStartTime) / 1000)), 1000);
     return () => clearInterval(id);
-  }, [view, workoutStartTime]);
+  }, [workoutStartTime]);
 
   // ── Onboarding ──────────────────────────────────────────────────────────
   const handleOnboardingComplete = async (formData) => {
@@ -238,6 +267,9 @@ export default function Workout() {
     setLoggedSets({});
     setSwappedEx({});
     setHistory({});
+    setWorkoutStartTime(null);
+    setElapsed(0);
+    try { sessionStorage.removeItem("invictus_active_workout"); } catch {}
   };
 
   // ── Log handlers ────────────────────────────────────────────────────────
@@ -256,7 +288,10 @@ export default function Workout() {
     setWorkoutDone(true);
     setTodayLogged(true);
     setIsWorkoutPaused(false);
+    setWorkoutStartTime(null);
+    setElapsed(0);
     setView("plan");
+    try { sessionStorage.removeItem("invictus_active_workout"); } catch {}
   };
 
   // ── Plan-view exercise swap ──────────────────────────────────────────────
@@ -444,7 +479,11 @@ export default function Workout() {
                       {plan.weekly_schedule.find(d => d.day === todayDay())?.focus}
                     </p>
                     {todayLogged  && <p className="text-xs text-green-400 mt-1">✓ Completed today</p>}
-                    {isWorkoutPaused && <p className="text-xs text-yellow-400 mt-1">⏸ Workout in progress</p>}
+                    {isWorkoutPaused && (
+                      <p className="text-xs text-yellow-400 mt-1 font-mono">
+                        ⏸ {String(Math.floor(elapsed / 3600)).padStart(2,"0")}:{String(Math.floor((elapsed % 3600) / 60)).padStart(2,"0")}:{String(elapsed % 60).padStart(2,"0")} in progress
+                      </p>
+                    )}
                   </div>
                   {!todayLogged && (
                     <div className="flex flex-col items-end gap-1.5">
