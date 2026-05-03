@@ -105,6 +105,8 @@ export default function Workout() {
   const [swappedEx,      setSwappedEx]      = useState({});
   const [history,        setHistory]        = useState({});
   const [isWorkoutPaused,setIsWorkoutPaused]= useState(false);
+  const [workoutStartTime,setWorkoutStartTime]=useState(null);
+  const [elapsed,        setElapsed]        = useState(0); // seconds
 
   // ── Plan view state ─────────────────────────────────────────────────────
   const [expandedDay,    setExpandedDay]    = useState(null);
@@ -164,6 +166,13 @@ export default function Workout() {
     load();
   }, [view, exercises]);
 
+  // ── Elapsed timer ───────────────────────────────────────────────────────
+  useEffect(() => {
+    if (view !== "active" || !workoutStartTime) return;
+    const id = setInterval(() => setElapsed(Math.floor((Date.now() - workoutStartTime) / 1000)), 1000);
+    return () => clearInterval(id);
+  }, [view, workoutStartTime]);
+
   // ── Onboarding ──────────────────────────────────────────────────────────
   const handleOnboardingComplete = async (formData) => {
     setGenerating(true);
@@ -189,6 +198,9 @@ export default function Workout() {
       setView("active");
       return;
     }
+
+    setWorkoutStartTime(Date.now());
+    setElapsed(0);
 
     // Fresh start — apply any plan-view swaps
     const dayIdx     = plan.weekly_schedule?.findIndex(d => d.day === todayDay());
@@ -339,6 +351,9 @@ export default function Workout() {
           <div>
             <p className="text-xs text-red-400 tracking-widest uppercase font-display">{todayDay()}</p>
             <h1 className="text-2xl font-bold text-white">Today's Workout</h1>
+            <p className="text-xs text-gray-500 mt-0.5 font-mono">
+              {String(Math.floor(elapsed / 3600)).padStart(2,"0")}:{String(Math.floor((elapsed % 3600) / 60)).padStart(2,"0")}:{String(elapsed % 60).padStart(2,"0")}
+            </p>
           </div>
           <button
             onClick={handleBackToPlan}

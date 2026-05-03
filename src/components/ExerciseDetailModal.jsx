@@ -6,29 +6,52 @@ import { db, auth } from "../firebase";
 import { collection, getDocs } from "firebase/firestore";
 import { EXERCISES, MUSCLE_COLORS, MUSCLE_BG, getSameMuscleAlts } from "../data/exercises";
 
-// ── Data fetcher: ExerciseDB (GIFs) → wger fallback ─────────────────────────
+// ── Data fetcher: ExerciseDB (search → detail) → wger fallback ──────────────
 const INFO_CACHE = {};
 async function fetchExerciseInfo(name) {
   if (INFO_CACHE[name] !== undefined) return INFO_CACHE[name];
-  // 1. Try ExerciseDB proxy (GIF + step-by-step instructions)
+  const lc = name.toLowerCase();
+
+  // 1. Search by name, then fetch detail for video + instructions
   try {
-    const r = await fetch(`/api/exercisedb?type=name&q=${encodeURIComponent(name)}&limit=5`);
+    const r = await fetch(`/api/exercisedb?type=name&q=${encodeURIComponent(name)}&limit=10`);
     if (r.ok) {
       const json = await r.json();
       const data = json.data || [];
       if (data.length) {
-        const match = data.find(e => e.name?.toLowerCase() === name.toLowerCase()) || data[0];
+        // Prefer exact name, then partial match, then first result
+        const match =
+          data.find(e => e.name?.toLowerCase() === lc) ||
+          data.find(e => e.name?.toLowerCase().includes(lc)) ||
+          data.find(e => lc.includes(e.name?.toLowerCase())) ||
+          data[0];
+
+        // Fetch the detail record to get videoUrl + instructions
+        const dr = await fetch(`/api/exercisedb?type=detail&id=${match.exerciseId}`);
+        if (dr.ok) {
+          const dj = await dr.json();
+          const d  = dj.data || {};
+          INFO_CACHE[name] = {
+            video:        d.videoUrl || null,
+            img:          d.imageUrl || match.imageUrl || null,
+            instructions: Array.isArray(d.instructions) ? d.instructions : [],
+            desc:         d.overview  || null,
+            equipment:    (d.equipments || match.equipments || [])[0] || null,
+          };
+          return INFO_CACHE[name];
+        }
+
+        // Detail fetch failed — use search-level data
         INFO_CACHE[name] = {
-          gif:          match.gifUrl || null,
-          img:          null,
-          instructions: Array.isArray(match.instructions) ? match.instructions : [],
-          desc:         null,
-          equipment:    match.equipment || null,
+          video: null, img: match.imageUrl || null,
+          instructions: [], desc: null,
+          equipment: (match.equipments || [])[0] || null,
         };
         return INFO_CACHE[name];
       }
     }
   } catch {}
+
   // 2. Fall back to wger (static image + HTML description)
   try {
     const r1 = await fetch(`https://wger.de/api/v2/exercise/?format=json&language=2&name=${encodeURIComponent(name)}`);
@@ -40,7 +63,7 @@ async function fetchExerciseInfo(name) {
     const img  = d2?.images?.[0]?.image || null;
     const raw  = d2?.translations?.find(t => t.language === 2)?.description || "";
     const desc = raw.replace(/<[^>]+>/g, "").trim();
-    INFO_CACHE[name] = { gif: null, img, instructions: [], desc, equipment: null };
+    INFO_CACHE[name] = { video: null, img, instructions: [], desc, equipment: null };
     return INFO_CACHE[name];
   } catch {
     INFO_CACHE[name] = null;
@@ -108,7 +131,8 @@ export default function ExerciseDetailModal({ exercise, onClose, onSwap, onLog }
 
   if (!exercise) return null;
 
-  const heroSrc = info?.gif || info?.img || null;
+  const heroVideo = info?.video || null;
+  const heroImg   = info?.img   || null;
   const instructions = info?.instructions?.length ? info.instructions : (info?.desc ? [info.desc] : (libEntry?.desc ? [libEntry.desc] : []));
 
   return (
@@ -135,19 +159,25 @@ export default function ExerciseDetailModal({ exercise, onClose, onSwap, onLog }
 
         <div className="px-4 pb-32 max-w-lg mx-auto w-full space-y-4 pt-4">
 
-          {/* Hero: GIF or image */}
+          {/* Hero: video (MP4) → image → placeholder */}
           {infoLoading ? (
             <div className="w-full h-52 rounded-2xl bg-[#111] flex items-center justify-center">
               <div className="w-5 h-5 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
             </div>
-          ) : heroSrc ? (
+          ) : heroVideo ? (
             <div className="w-full h-52 rounded-2xl overflow-hidden bg-[#111]">
-              <img
-                src={heroSrc}
-                alt={exercise.name}
+              <video
+                src={heroVideo}
+                autoPlay
+                loop
+                muted
+                playsInline
                 className="w-full h-full object-cover"
-                style={{ imageRendering: info?.gif ? "auto" : "auto" }}
               />
+            </div>
+          ) : heroImg ? (
+            <div className="w-full h-52 rounded-2xl overflow-hidden bg-[#111]">
+              <img src={heroImg} alt={exercise.name} className="w-full h-full object-cover" />
             </div>
           ) : (
             <div className={`w-full h-24 rounded-2xl bg-gradient-to-br ${MUSCLE_COLORS[muscle] ? "from-[#1a1a1a]" : "from-[#111]"} to-[#0a0a0a] flex items-center justify-center`}>
