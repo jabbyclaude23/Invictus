@@ -81,8 +81,10 @@ export default function ExerciseDetailModal({ exercise, onClose, onSwap, onLog }
   const [swapFilter, setSwapFilter] = useState("");
 
   // Log sets state (only used when onLog is provided — active workout mode)
-  const [sets,    setSets]    = useState([{ reps: "", weight: "" }]);
-  const [logDone, setLogDone] = useState(false);
+  const defaultSets = () => Array.from({ length: exercise?.sets || 1 }, () => ({ reps: "", weight: "" }));
+  const [sets,       setSets]       = useState(defaultSets);
+  const [logDone,    setLogDone]    = useState(false);
+  const [loggedSets, setLoggedSets] = useState([]);
 
   const muscle      = exercise?.muscle || "chest";
   const muscleColor = MUSCLE_COLORS[muscle] || "text-gray-400";
@@ -98,7 +100,8 @@ export default function ExerciseDetailModal({ exercise, onClose, onSwap, onLog }
     setInfo(null); setInfoLoading(true);
     setHistory([]); setHistLoaded(false);
     setShowSwap(false); setSwapFilter("");
-    setSets([{ reps: "", weight: "" }]); setLogDone(false);
+    setSets(Array.from({ length: exercise?.sets || 1 }, () => ({ reps: "", weight: "" })));
+    setLogDone(false); setLoggedSets([]);
 
     fetchExerciseInfo(exercise.name).then(d => { setInfo(d); setInfoLoading(false); });
 
@@ -126,6 +129,7 @@ export default function ExerciseDetailModal({ exercise, onClose, onSwap, onLog }
     const valid = sets.filter(s => s.reps);
     if (!valid.length || !onLog) return;
     onLog(exercise.name, valid);
+    setLoggedSets(valid);
     setLogDone(true);
   };
 
@@ -225,9 +229,18 @@ export default function ExerciseDetailModal({ exercise, onClose, onSwap, onLog }
             <div className="bg-[#111] border border-white/5 rounded-2xl p-4">
               <p className="text-xs text-gray-500 uppercase tracking-wider mb-3 font-medium">Log Sets</p>
               {logDone ? (
-                <p className="text-sm text-green-400 flex items-center gap-2">
-                  ✓ Logged! Great work.
-                </p>
+                <div className="space-y-1.5">
+                  {loggedSets.map((s, i) => (
+                    <div key={i} className="flex items-center gap-3 text-sm">
+                      <span className="text-xs text-gray-600 w-10 flex-shrink-0">Set {i + 1}</span>
+                      <span className="text-white font-medium">{s.reps} reps</span>
+                      {s.weight ? <span className="text-gray-400">· {s.weight} kg</span> : null}
+                    </div>
+                  ))}
+                  <p className="text-sm text-green-400 flex items-center gap-1.5 mt-2 pt-2 border-t border-white/5">
+                    ✓ Logged! Great work.
+                  </p>
+                </div>
               ) : (
                 <>
                   <div className="space-y-2 mb-3">
@@ -236,20 +249,22 @@ export default function ExerciseDetailModal({ exercise, onClose, onSwap, onLog }
                         <span className="text-xs text-gray-600 w-10 flex-shrink-0">Set {i + 1}</span>
                         <input
                           type="number"
+                          inputMode="numeric"
                           placeholder="Reps"
                           value={s.reps}
                           onChange={e => updateSet(i, "reps", e.target.value)}
-                          className="flex-1 bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500/50"
+                          className="flex-1 min-w-0 bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500/50"
                         />
                         <input
                           type="number"
+                          inputMode="decimal"
                           placeholder="kg"
                           value={s.weight}
                           onChange={e => updateSet(i, "weight", e.target.value)}
-                          className="flex-1 bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500/50"
+                          className="w-20 flex-shrink-0 bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500/50"
                         />
                         {sets.length > 1 && (
-                          <button onClick={() => removeSet(i)} className="text-gray-600 hover:text-red-400 text-xs flex-shrink-0">✕</button>
+                          <button onClick={() => removeSet(i)} className="text-gray-600 hover:text-red-400 text-xs flex-shrink-0 w-5">✕</button>
                         )}
                       </div>
                     ))}
