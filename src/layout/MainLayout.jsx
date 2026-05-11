@@ -49,8 +49,7 @@ export default function MainLayout() {
       {/* Header */}
       {!isCoach && (
         <header
-          className="flex justify-between items-center gap-3 px-4 sm:px-6 pb-3 border-b border-[#222] bg-[#0b0b0b]/70 backdrop-blur-md sticky top-0 z-40 shadow-[0_4px_20px_rgba(0,0,0,0.3)]"
-          style={{ paddingTop: "max(12px, env(safe-area-inset-top))" }}
+          className="app-header flex justify-between items-center gap-3 px-4 sm:px-6 pb-3 border-b border-[#222] bg-[#0b0b0b]/70 backdrop-blur-md sticky top-0 z-40 shadow-[0_4px_20px_rgba(0,0,0,0.3)]"
         >
           <h1 className="text-lg sm:text-xl font-bold tracking-[3px] sm:tracking-[4px] text-yellow-400 drop-shadow-[0_0_8px_rgba(250,192,0,0.35)]">
             INVICTUS
