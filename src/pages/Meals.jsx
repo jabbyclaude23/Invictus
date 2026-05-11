@@ -160,7 +160,7 @@ function MealChatBar({ onSend, loading }) {
   return (
     <div
       className="fixed left-0 right-0 z-40 px-4"
-      style={{ bottom: "calc(4rem + env(safe-area-inset-bottom))" }}
+      style={{ bottom: "76px" }}
     >
       <div className="max-w-lg mx-auto">
         <div className="flex items-center gap-2 bg-[#0f0f0f] border border-green-500/25 rounded-2xl px-4 py-2.5 shadow-lg shadow-black/50">
@@ -316,7 +316,7 @@ export default function Meals() {
 
   // ── Setup / onboarding ───────────────────────────────────────────────────
   if (!mealSetup || view === "setup") return (
-    <div className="min-h-screen bg-black flex flex-col items-center justify-center px-6 pb-24">
+    <div className="min-h-[100dvh] bg-black flex flex-col items-center justify-center px-6 pb-20">
       <div className="glow-bg glow-meals" />
       <div className="relative z-10 w-full max-w-sm">
         <div className="flex items-center gap-3 mb-8">
@@ -358,7 +358,7 @@ export default function Meals() {
   const todayPlan = plan?.days?.find(d => d.day === todayDay()) || plan?.days?.[0];
 
   return (
-    <div className="min-h-[100dvh] bg-black px-4 pt-6" style={{ paddingBottom: "calc(7rem + env(safe-area-inset-bottom))" }}>
+    <div className="min-h-[100dvh] bg-black px-4 pt-6 pb-28">
       <div className="glow-bg glow-meals" />
       <div className="relative z-10 max-w-lg mx-auto">
 

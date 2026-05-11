@@ -78,20 +78,17 @@ export default function MainLayout() {
       {/* Bottom Nav */}
       {!isCoach && (
         <nav
-          className={`fixed bottom-0 left-0 w-full max-w-full flex justify-around pt-3 z-30 transition-transform duration-500 backdrop-blur-md bg-[#0b0b0b]/70 border-t border-[#222] ${
+          className={`fixed bottom-0 left-0 w-full max-w-full h-[72px] flex justify-around py-2 z-30 transition-transform duration-500 backdrop-blur-md bg-[#0b0b0b]/70 border-t border-[#222] ${
             hideNav ? "translate-y-full" : "translate-y-0"
           }`}
-          style={{
-            paddingBottom: "max(12px, env(safe-area-inset-bottom))",
-            bottom: 0,
-          }}
+          style={{ bottom: 0 }}
         >
           {tabs.map((tab) => (
             <NavLink
               key={tab.to}
               to={tab.to}
               className={({ isActive }) =>
-                `flex min-w-0 flex-1 flex-col items-center text-sm ${
+                `flex min-w-0 flex-1 flex-col items-center justify-center text-sm ${
                   isActive ? "text-yellow-400" : "text-gray-400"
                 }`
               }

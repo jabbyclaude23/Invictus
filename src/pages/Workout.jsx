@@ -63,7 +63,7 @@ function WorkoutChatBar({ onSend, loading }) {
   return (
     <div
       className="fixed left-0 right-0 z-40 px-4"
-      style={{ bottom: "calc(4rem + env(safe-area-inset-bottom))" }}
+      style={{ bottom: "76px" }}
     >
       <div className="max-w-lg mx-auto bg-[#111] border border-red-500/20 rounded-2xl flex items-center gap-2 px-3 py-2 shadow-xl">
         <input
@@ -428,7 +428,7 @@ export default function Workout() {
   // ── Plan view ────────────────────────────────────────────────────────────
   const plan = plans.workout;
   return (
-    <div className="min-h-screen bg-black pb-44 px-4 pt-6">
+    <div className="min-h-[100dvh] bg-black pb-28 px-4 pt-6">
       <div className="glow-bg glow-workout" />
 
       {/* Exercise detail modal */}
