@@ -224,7 +224,7 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white px-6 py-8 relative">
+    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-black text-white px-4 sm:px-6 py-8 relative">
       <motion.div
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
@@ -257,7 +257,7 @@ export default function Dashboard() {
           const workoutToday = plans.workout?.weekly_schedule?.find(d => d.day === todayDay);
           const mealTarget   = plans.meal?.daily_targets;
           return (
-            <div className="flex gap-3 mb-6">
+        <div className="flex flex-col sm:flex-row gap-3 mb-6">
               {workoutToday && (
                 <div className="flex-1 bg-red-500/8 border border-red-500/20 rounded-2xl px-3 py-2.5 flex items-center gap-2">
                   <Dumbbell size={14} className="text-red-400 flex-shrink-0" />
@@ -290,10 +290,10 @@ export default function Dashboard() {
             <button
               key={to}
               onClick={() => navigate(to)}
-              className={`flex flex-col items-center gap-1.5 py-3 rounded-2xl border ${color} transition-all`}
+              className={`flex min-w-0 flex-col items-center gap-1.5 py-3 rounded-2xl border ${color} transition-all`}
             >
               {icon}
-              <span className="text-xs font-medium">{label}</span>
+              <span className="max-w-full truncate text-xs font-medium">{label}</span>
             </button>
           ))}
         </div>
@@ -303,7 +303,7 @@ export default function Dashboard() {
 
         {/* Stats Section */}
         <div className="bg-[#111] border border-[#222] rounded-2xl p-4 mb-8 shadow-lg shadow-black/40">
-          <div className="flex justify-between items-center gap-3 mb-4">
+          <div className="flex flex-wrap justify-between items-center gap-3 mb-4">
             <button
               onClick={() => toggleSection("stats")}
               className="flex flex-1 items-center justify-between text-left"
@@ -322,7 +322,7 @@ export default function Dashboard() {
                 className="flex items-center space-x-2 bg-yellow-400 text-black px-3 py-1.5 rounded-lg text-sm font-semibold hover:bg-yellow-300 transition"
               >
                 <Plus size={16} />
-                <span>Add Stat</span>
+                <span className="hidden min-[380px]:inline">Add Stat</span>
               </button>
             )}
           </div>
@@ -350,7 +350,7 @@ export default function Dashboard() {
 
         {/* Daily Progress */}
         <div className="bg-[#111] border border-[#222] rounded-2xl p-4 shadow-lg shadow-black/40">
-          <div className="flex justify-between items-center gap-3 mb-4">
+          <div className="flex flex-wrap justify-between items-center gap-3 mb-4">
             <button
               onClick={() => toggleSection("habits")}
               className="flex flex-1 items-center justify-between text-left"
@@ -369,7 +369,7 @@ export default function Dashboard() {
                 className="flex items-center space-x-2 bg-yellow-400 text-black px-3 py-1.5 rounded-lg text-sm font-semibold hover:bg-yellow-300 transition"
               >
                 <Plus size={16} />
-                <span>Add Habit</span>
+                <span className="hidden min-[380px]:inline">Add Habit</span>
               </button>
             )}
           </div>

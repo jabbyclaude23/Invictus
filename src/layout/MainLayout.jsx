@@ -45,28 +45,28 @@ export default function MainLayout() {
   const isCoach = location.pathname.includes("/coach");
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col">
+    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-black text-white flex flex-col">
       {/* Header */}
       {!isCoach && (
-        <header className="flex justify-between items-center px-6 py-3 border-b border-[#222] bg-[#0b0b0b]/70 backdrop-blur-md sticky top-0 z-40 shadow-[0_4px_20px_rgba(0,0,0,0.3)]">
-          <h1 className="text-xl font-bold tracking-[4px] text-yellow-400 drop-shadow-[0_0_8px_rgba(250,192,0,0.35)]">
+        <header className="flex justify-between items-center gap-3 px-4 sm:px-6 py-3 border-b border-[#222] bg-[#0b0b0b]/70 backdrop-blur-md sticky top-0 z-40 shadow-[0_4px_20px_rgba(0,0,0,0.3)]">
+          <h1 className="text-lg sm:text-xl font-bold tracking-[3px] sm:tracking-[4px] text-yellow-400 drop-shadow-[0_0_8px_rgba(250,192,0,0.35)]">
             INVICTUS
           </h1>
-          <div className="flex items-center space-x-3">
+          <div className="flex min-w-0 items-center space-x-3">
             {user && <UserMenu user={user} onLogout={() => navigate("/auth")} />}
           </div>
         </header>
       )}
 
       {/* Page transition */}
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 overflow-y-auto overflow-x-hidden">
         <motion.div
           key={location.pathname}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.3 }}
-          className="flex-1"
+          className="flex-1 min-w-0"
         >
           <Outlet />
         </motion.div>
@@ -75,7 +75,7 @@ export default function MainLayout() {
       {/* Bottom Nav */}
       {!isCoach && (
         <nav
-          className={`fixed bottom-0 left-0 w-full flex justify-around pt-3 z-30 transition-transform duration-500 backdrop-blur-md bg-[#0b0b0b]/70 border-t border-[#222] ${
+          className={`fixed bottom-0 left-0 w-full max-w-full flex justify-around pt-3 z-30 transition-transform duration-500 backdrop-blur-md bg-[#0b0b0b]/70 border-t border-[#222] ${
             hideNav ? "translate-y-full" : "translate-y-0"
           }`}
           style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}
@@ -85,13 +85,13 @@ export default function MainLayout() {
               key={tab.to}
               to={tab.to}
               className={({ isActive }) =>
-                `flex flex-col items-center text-sm ${
+                `flex min-w-0 flex-1 flex-col items-center text-sm ${
                   isActive ? "text-yellow-400" : "text-gray-400"
                 }`
               }
             >
               {tab.icon}
-              <span className="text-xs mt-1">{tab.label}</span>
+              <span className="mt-1 max-w-full truncate text-[11px] sm:text-xs">{tab.label}</span>
             </NavLink>
           ))}
         </nav>

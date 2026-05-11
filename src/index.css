@@ -14,7 +14,15 @@ html, body {
   position: relative;
 }
 
+#root {
+  width: 100%;
+  max-width: 100vw;
+  min-height: 100%;
+  overflow-x: hidden;
+}
+
 * {
+  box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;
 }
 @keyframes glowPulse {
