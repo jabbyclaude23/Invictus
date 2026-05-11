@@ -45,10 +45,13 @@ export default function MainLayout() {
   const isCoach = location.pathname.includes("/coach");
 
   return (
-    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-black text-white flex flex-col">
+    <div className="min-h-[100dvh] w-full max-w-full overflow-x-hidden bg-black text-white flex flex-col">
       {/* Header */}
       {!isCoach && (
-        <header className="flex justify-between items-center gap-3 px-4 sm:px-6 py-3 border-b border-[#222] bg-[#0b0b0b]/70 backdrop-blur-md sticky top-0 z-40 shadow-[0_4px_20px_rgba(0,0,0,0.3)]">
+        <header
+          className="flex justify-between items-center gap-3 px-4 sm:px-6 pb-3 border-b border-[#222] bg-[#0b0b0b]/70 backdrop-blur-md sticky top-0 z-40 shadow-[0_4px_20px_rgba(0,0,0,0.3)]"
+          style={{ paddingTop: "max(12px, env(safe-area-inset-top))" }}
+        >
           <h1 className="text-lg sm:text-xl font-bold tracking-[3px] sm:tracking-[4px] text-yellow-400 drop-shadow-[0_0_8px_rgba(250,192,0,0.35)]">
             INVICTUS
           </h1>
@@ -78,7 +81,10 @@ export default function MainLayout() {
           className={`fixed bottom-0 left-0 w-full max-w-full flex justify-around pt-3 z-30 transition-transform duration-500 backdrop-blur-md bg-[#0b0b0b]/70 border-t border-[#222] ${
             hideNav ? "translate-y-full" : "translate-y-0"
           }`}
-          style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}
+          style={{
+            paddingBottom: "max(12px, env(safe-area-inset-bottom))",
+            bottom: 0,
+          }}
         >
           {tabs.map((tab) => (
             <NavLink

@@ -358,7 +358,7 @@ export default function Meals() {
   const todayPlan = plan?.days?.find(d => d.day === todayDay()) || plan?.days?.[0];
 
   return (
-    <div className="min-h-screen bg-black pb-44 px-4 pt-6">
+    <div className="min-h-[100dvh] bg-black px-4 pt-6" style={{ paddingBottom: "calc(7rem + env(safe-area-inset-bottom))" }}>
       <div className="glow-bg glow-meals" />
       <div className="relative z-10 max-w-lg mx-auto">
 
