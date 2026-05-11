@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Trash2, Edit2, Check } from "lucide-react";
+import { Plus, Trash2, Edit2, Check, ChevronDown, ChevronUp } from "lucide-react";
 import {
   collection,
   addDoc,
@@ -20,6 +20,7 @@ export default function GoalTracker() {
   const [target, setTarget] = useState("");
   const [editingId, setEditingId] = useState(null);
   const [tempProgress, setTempProgress] = useState("");
+  const [expanded, setExpanded] = useState(false);
 
   const fireConfetti = () => {
     confetti({
@@ -123,11 +124,22 @@ export default function GoalTracker() {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
     >
-      <h2 className="text-lg font-semibold text-yellow-400 mb-4">
-        Mini Goals
-      </h2>
+      <button
+        onClick={() => setExpanded((value) => !value)}
+        className="flex w-full items-center justify-between text-left"
+        aria-expanded={expanded}
+      >
+        <h2 className="text-lg font-semibold text-yellow-400">
+          Mini Goals
+        </h2>
+        {expanded ? (
+          <ChevronUp size={18} className="text-yellow-400" />
+        ) : (
+          <ChevronDown size={18} className="text-yellow-400" />
+        )}
+      </button>
 
-      {goals.length === 0 ? (
+      {expanded && (goals.length === 0 ? (
         <p className="text-gray-500 italic text-sm mb-3">
           No goals yet — add one below.
         </p>
@@ -220,10 +232,10 @@ export default function GoalTracker() {
             );
           })}
         </div>
-      )}
+      ))}
 
       {/* Add New Goal Row */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      {expanded && <div className="flex flex-wrap items-center justify-between gap-2">
         <input
           type="text"
           value={newGoal}
@@ -244,7 +256,7 @@ export default function GoalTracker() {
         >
           <Plus size={14} />
         </button>
-      </div>
+      </div>}
     </motion.div>
   );
 }

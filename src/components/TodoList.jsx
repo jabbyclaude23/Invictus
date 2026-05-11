@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Plus, Trash2, Check } from "lucide-react";
+import { Plus, Trash2, Check, ChevronDown, ChevronUp } from "lucide-react";
 import {
   collection,
   addDoc,
@@ -18,6 +18,7 @@ import confetti from "canvas-confetti";
 export default function TodoList() {
   const [tasks, setTasks] = useState([]);
   const [newTask, setNewTask] = useState("");
+  const [expanded, setExpanded] = useState(false);
 
   const fireConfetti = () => {
   confetti({
@@ -104,9 +105,20 @@ export default function TodoList() {
     >
       {/* Header & Progress */}
       <div className="flex flex-col space-y-2 mb-4">
-        <h2 className="text-lg font-semibold text-yellow-400">To-Do List</h2>
+        <button
+          onClick={() => setExpanded((value) => !value)}
+          className="flex w-full items-center justify-between text-left"
+          aria-expanded={expanded}
+        >
+          <h2 className="text-lg font-semibold text-yellow-400">To-Do List</h2>
+          {expanded ? (
+            <ChevronUp size={18} className="text-yellow-400" />
+          ) : (
+            <ChevronDown size={18} className="text-yellow-400" />
+          )}
+        </button>
 
-        {tasks.length > 0 && (
+        {expanded && tasks.length > 0 && (
           <>
             <p className="text-sm text-gray-400">
               {tasks.filter((t) => t.done).length} of {tasks.length} tasks complete
@@ -127,7 +139,7 @@ export default function TodoList() {
       </div>
 
       {/* Tasks */}
-      {tasks.length === 0 ? (
+      {expanded && (tasks.length === 0 ? (
         <p className="text-gray-500 italic text-sm mb-3">
           No tasks yet — add one below.
         </p>
@@ -169,10 +181,10 @@ export default function TodoList() {
             </div>
           ))}
         </div>
-      )}
+      ))}
 
       {/* Add Task Input */}
-      <div className="flex space-x-2">
+      {expanded && <div className="flex space-x-2">
         <input
           type="text"
           value={newTask}
@@ -186,7 +198,7 @@ export default function TodoList() {
         >
           <Plus size={14} />
         </button>
-      </div>
+      </div>}
     </motion.div>
   );
 }

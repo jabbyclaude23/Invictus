@@ -19,7 +19,7 @@ import AddStatModal from "../components/AddStatModal";
 import StatCard from "../components/StatCard";
 import TodoList from "../components/TodoList";
 import GoalTracker from "../components/GoalTracker";
-import { Plus, MessageCircle, X, Send, Bot, Dumbbell, Utensils, TrendingUp, Zap } from "lucide-react";
+import { Plus, MessageCircle, X, Send, Bot, Dumbbell, Utensils, TrendingUp, Zap, ChevronDown, ChevronUp } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useCoach } from "../context/CoachContext.jsx";
 
@@ -40,6 +40,10 @@ export default function Dashboard() {
   const [user, setUser] = useState(null);
   const [editingHabit, setEditingHabit] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [expandedSections, setExpandedSections] = useState({
+    stats: false,
+    habits: true,
+  });
 
   // mini chat state
   const [chatOpen, setChatOpen] = useState(false);
@@ -188,6 +192,10 @@ export default function Dashboard() {
   ).length;
   const percentDone = habits.length ? (completedCount / habits.length) * 100 : 0;
 
+  const toggleSection = (section) => {
+    setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
+  };
+
   // ----- Mini Chat logic -----
   useEffect(() => {
     if (chatOpen) {
@@ -295,18 +303,31 @@ export default function Dashboard() {
 
         {/* Stats Section */}
         <div className="bg-[#111] border border-[#222] rounded-2xl p-4 mb-8 shadow-lg shadow-black/40">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold text-yellow-400">Stats</h2>
+          <div className="flex justify-between items-center gap-3 mb-4">
             <button
-              onClick={() => setShowStatModal(true)}
-              className="flex items-center space-x-2 bg-yellow-400 text-black px-3 py-1.5 rounded-lg text-sm font-semibold hover:bg-yellow-300 transition"
+              onClick={() => toggleSection("stats")}
+              className="flex flex-1 items-center justify-between text-left"
+              aria-expanded={expandedSections.stats}
             >
-              <Plus size={16} />
-              <span>Add Stat</span>
+              <h2 className="text-lg font-semibold text-yellow-400">Stats</h2>
+              {expandedSections.stats ? (
+                <ChevronUp size={18} className="text-yellow-400" />
+              ) : (
+                <ChevronDown size={18} className="text-yellow-400" />
+              )}
             </button>
+            {expandedSections.stats && (
+              <button
+                onClick={() => setShowStatModal(true)}
+                className="flex items-center space-x-2 bg-yellow-400 text-black px-3 py-1.5 rounded-lg text-sm font-semibold hover:bg-yellow-300 transition"
+              >
+                <Plus size={16} />
+                <span>Add Stat</span>
+              </button>
+            )}
           </div>
 
-          {stats.length === 0 ? (
+          {expandedSections.stats && (stats.length === 0 ? (
             <p className="text-sm text-gray-500 italic">
               No stats yet — click "Add Stat" to start tracking.
             </p>
@@ -321,7 +342,7 @@ export default function Dashboard() {
                 />
               ))}
             </div>
-          )}
+          ))}
         </div>
 
         {/* Goal Tracker */}
@@ -329,18 +350,31 @@ export default function Dashboard() {
 
         {/* Daily Progress */}
         <div className="bg-[#111] border border-[#222] rounded-2xl p-4 shadow-lg shadow-black/40">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold text-yellow-400">Daily Progress</h2>
+          <div className="flex justify-between items-center gap-3 mb-4">
             <button
-              onClick={() => setShowHabitModal(true)}
-              className="flex items-center space-x-2 bg-yellow-400 text-black px-3 py-1.5 rounded-lg text-sm font-semibold hover:bg-yellow-300 transition"
+              onClick={() => toggleSection("habits")}
+              className="flex flex-1 items-center justify-between text-left"
+              aria-expanded={expandedSections.habits}
             >
-              <Plus size={16} />
-              <span>Add Habit</span>
+              <h2 className="text-lg font-semibold text-yellow-400">Daily Progress</h2>
+              {expandedSections.habits ? (
+                <ChevronUp size={18} className="text-yellow-400" />
+              ) : (
+                <ChevronDown size={18} className="text-yellow-400" />
+              )}
             </button>
+            {expandedSections.habits && (
+              <button
+                onClick={() => setShowHabitModal(true)}
+                className="flex items-center space-x-2 bg-yellow-400 text-black px-3 py-1.5 rounded-lg text-sm font-semibold hover:bg-yellow-300 transition"
+              >
+                <Plus size={16} />
+                <span>Add Habit</span>
+              </button>
+            )}
           </div>
 
-          {habits.length === 0 ? (
+          {expandedSections.habits && (habits.length === 0 ? (
             <p className="text-sm text-gray-500 italic">
               No habits yet — click "Add Habit" to start tracking.
             </p>
@@ -398,7 +432,7 @@ export default function Dashboard() {
                 </div>
               </div>
             </div>
-          )}
+          ))}
         </div>
       </motion.div>
 
