@@ -39,7 +39,6 @@ export default function Dashboard() {
           <h1>{greeting}{firstName ? `, ${firstName}` : ''}<span className="text-gold">.</span></h1>
           <p className="page-description">Small actions. Stronger every day.</p>
         </div>
-        <button className="button-primary" onClick={() => setModal('habit')}><Plus size={17} /> Add habit</button>
       </div>
 
       {data.error && <div className="status-error" role="alert"><span>{data.error}</span><button className="button-secondary" onClick={data.reload}>Try again</button></div>}
