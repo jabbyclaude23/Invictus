@@ -1,204 +1,66 @@
-import React, { useState, useEffect } from "react";
-import { motion } from "framer-motion";
-import { Plus, Trash2, Check, ChevronDown, ChevronUp } from "lucide-react";
-import {
-  collection,
-  addDoc,
-  getDocs,
-  deleteDoc,
-  updateDoc,
-  doc,
-  query,
-  orderBy,
-} from "firebase/firestore";
+import { useEffect, useRef, useState } from "react";
+import { Plus, Trash2, ChevronDown } from "lucide-react";
+import { collection, addDoc, getDocs, deleteDoc, updateDoc, doc, query, orderBy } from "firebase/firestore";
 import { db, auth } from "../firebase";
-import confetti from "canvas-confetti";
-
 
 export default function TodoList() {
   const [tasks, setTasks] = useState([]);
   const [newTask, setNewTask] = useState("");
-  const [expanded, setExpanded] = useState(false);
-
-  const fireConfetti = () => {
-  confetti({
-    particleCount: 25,
-    spread: 60,
-    startVelocity: 25,
-    gravity: 0.9,
-    colors: ["#facc15", "#fef08a", "#eab308"],
-    ticks: 60,
-    origin: { y: 0.8 },
-  });
-};
-
-
-  // 🔹 Load user's tasks
+  const [expanded, setExpanded] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
+  const busy = useRef(false);
   useEffect(() => {
-    const fetchTasks = async () => {
-      const user = auth.currentUser;
-      if (!user) return;
-      const q = query(
-        collection(db, "users", user.uid, "todos"),
-        orderBy("createdAt")
-      );
-      const snapshot = await getDocs(q);
-      const data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-      setTasks(data);
-    };
-    fetchTasks();
+    let active = true;
+    async function load() {
+      try {
+        if (!auth.currentUser) throw new Error();
+        const snapshot = await getDocs(query(collection(db, "users", auth.currentUser.uid, "todos"), orderBy("createdAt")));
+        if (active) setTasks(snapshot.docs.map(item => ({ ...item.data(), id: item.id })));
+      } catch { if (active) setError("Couldn't load your tasks. Refresh to try again."); }
+      finally { if (active) setLoading(false); }
+    }
+    load();
+    return () => { active = false; };
   }, []);
-
-  // 🔹 Add new task
-  const handleAdd = async () => {
-    const user = auth.currentUser;
-    if (!user || !newTask.trim()) return;
-
-    const newItem = {
-      text: newTask.trim(),
-      done: false,
-      createdAt: new Date(),
-    };
-
-    const docRef = await addDoc(collection(db, "users", user.uid, "todos"), newItem);
-    setTasks([...tasks, { id: docRef.id, ...newItem }]);
-    setNewTask("");
-  };
-
-  // 🔹 Toggle task done
-  const handleToggle = async (task) => {
-    const user = auth.currentUser;
-    if (!user) return;
-
-    const updated = { ...task, done: !task.done };
-    await updateDoc(doc(db, "users", user.uid, "todos", task.id), {
-      done: updated.done,
+  async function mutate(action) {
+    if (busy.current || loading) return;
+    busy.current = true;
+    setPending(true);
+    setError("");
+    try {
+      if (!auth.currentUser) throw new Error();
+      await action(auth.currentUser.uid);
+    } catch { setError("Couldn't save that change. Please try again."); }
+    finally { busy.current = false; setPending(false); }
+  }
+  function add(event) {
+    event.preventDefault();
+    if (!newTask.trim()) return;
+    mutate(async uid => {
+      const item = { text: newTask.trim(), done: false, createdAt: new Date() };
+      const result = await addDoc(collection(db, "users", uid, "todos"), item);
+      setTasks(current => [...current, { ...item, id: result.id }]);
+      setNewTask("");
     });
-    if (!task.done) fireConfetti(); // fire only when marking complete
-    setTasks(tasks.map((t) => (t.id === task.id ? updated : t)));
-  };
-
-  // 🔹 Delete task
-  const handleDelete = async (id) => {
-    const user = auth.currentUser;
-    if (!user) return;
-
-    await deleteDoc(doc(db, "users", user.uid, "todos", id));
-    setTasks(tasks.filter((t) => t.id !== id));
-  };
-
-  // 🔹 Dynamic progress color
-  const completionRatio =
-    tasks.length > 0 ? tasks.filter((t) => t.done).length / tasks.length : 0;
-  const progressColor =
-    completionRatio < 0.33
-      ? "#ef4444" // red
-      : completionRatio < 0.66
-      ? "#fbbf24" // amber
-      : "#22c55e"; // green
-
-  return (
-    <motion.div
-      className="bg-[#111] border border-[#222] rounded-2xl p-4 shadow-lg shadow-black/40 mb-10 mt-6"
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-    >
-      {/* Header & Progress */}
-      <div className="flex flex-col space-y-2 mb-4">
-        <button
-          onClick={() => setExpanded((value) => !value)}
-          className="flex w-full items-center justify-between text-left"
-          aria-expanded={expanded}
-        >
-          <h2 className="text-lg font-semibold text-yellow-400">To-Do List</h2>
-          {expanded ? (
-            <ChevronUp size={18} className="text-yellow-400" />
-          ) : (
-            <ChevronDown size={18} className="text-yellow-400" />
-          )}
-        </button>
-
-        {expanded && tasks.length > 0 && (
-          <>
-            <p className="text-sm text-gray-400">
-              {tasks.filter((t) => t.done).length} of {tasks.length} tasks complete
-            </p>
-            <div className="w-full bg-[#222] h-2 rounded-full overflow-hidden">
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{
-                  width: `${completionRatio * 100}%`,
-                  backgroundColor: progressColor,
-                }}
-                transition={{ duration: 0.5 }}
-                className="h-2"
-              />
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Tasks */}
-      {expanded && (tasks.length === 0 ? (
-        <p className="text-gray-500 italic text-sm mb-3">
-          No tasks yet — add one below.
-        </p>
-      ) : (
-        <div className="space-y-2 mb-4">
-          {tasks.map((task) => (
-            <div
-              key={task.id}
-              className="flex items-center justify-between bg-[#1a1a1a] px-3 py-2 rounded-lg border border-[#333]"
-            >
-              <div
-                className={`flex items-center space-x-2 cursor-pointer transition ${
-                  task.done ? "opacity-60" : ""
-                }`}
-                onClick={() => handleToggle(task)}
-              >
-                <Check
-                  size={16}
-                  className={`${
-                    task.done ? "text-yellow-400" : "text-gray-600"
-                  } transition`}
-                />
-                <span
-                  className={`text-sm ${
-                    task.done
-                      ? "line-through text-gray-500"
-                      : "text-gray-300"
-                  }`}
-                >
-                  {task.text}
-                </span>
-              </div>
-              <button
-                onClick={() => handleDelete(task.id)}
-                className="text-gray-500 hover:text-red-400 transition"
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
-          ))}
-        </div>
-      ))}
-
-      {/* Add Task Input */}
-      {expanded && <div className="flex space-x-2">
-        <input
-          type="text"
-          value={newTask}
-          onChange={(e) => setNewTask(e.target.value)}
-          placeholder="New task..."
-          className="flex-1 bg-[#1a1a1a] border border-[#333] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-yellow-400"
-        />
-        <button
-          onClick={handleAdd}
-          className="bg-yellow-400 text-black px-3 py-1.5 rounded-lg text-sm font-semibold hover:bg-yellow-300 transition"
-        >
-          <Plus size={14} />
-        </button>
-      </div>}
-    </motion.div>
-  );
+  }
+  const done = tasks.filter(task => task.done).length;
+  return <section className="panel p-5 sm:p-6" aria-busy={loading || pending}>
+    <h2><button type="button" onClick={() => setExpanded(value => !value)} aria-expanded={expanded} aria-controls="daily-tasks" className="flex w-full items-center justify-between text-left text-[15px] font-semibold text-white">Daily tasks<ChevronDown size={17} className={`text-gray-500 ${expanded ? "rotate-180" : ""}`} /></button></h2>
+    <p className="mt-1 text-xs leading-5 text-gray-400">Clear the small things. Keep your day moving.</p>
+    {error && <p role="alert" className="mt-3 text-xs text-red-300">{error}</p>}
+    {expanded && <div id="daily-tasks" className="mt-5 space-y-4">
+      {loading ? <p role="status" className="text-sm text-gray-400">Loading tasks…</p> : tasks.length ? <>
+        <div className="flex items-center justify-between text-xs text-gray-400"><span>{done} of {tasks.length} complete</span><span>{Math.round(done / tasks.length * 100)}%</span></div>
+        <progress aria-label="Task completion" value={done} max={tasks.length} className="h-1 w-full accent-[#d4c17a]" />
+        <ul className="space-y-2">{tasks.map(task => <li key={task.id} className="flex items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] pl-3 pr-1">
+          <label className="flex min-h-12 min-w-0 flex-1 cursor-pointer items-center gap-3 py-2"><input type="checkbox" checked={task.done} disabled={pending} onChange={() => mutate(async uid => { await updateDoc(doc(db, "users", uid, "todos", task.id), { done: !task.done }); setTasks(current => current.map(item => item.id === task.id ? { ...item, done: !task.done } : item)); })} className="h-4 w-4 shrink-0 accent-[#d4c17a]" /><span className={`break-words text-sm ${task.done ? "text-gray-500 line-through" : "text-gray-200"}`}>{task.text}</span></label>
+          <button type="button" aria-label={`Delete task: ${task.text}`} disabled={pending} onClick={() => { if (window.confirm(`Delete "${task.text}"?`)) mutate(async uid => { await deleteDoc(doc(db, "users", uid, "todos", task.id)); setTasks(current => current.filter(item => item.id !== task.id)); }); }} className="flex h-11 w-11 shrink-0 items-center justify-center text-gray-500 hover:text-red-300 disabled:opacity-40"><Trash2 size={15} /></button>
+        </li>)}</ul>
+      </> : <p className="text-sm leading-6 text-gray-400">A clear slate. Add your first task below.</p>}
+      <form onSubmit={add} className="flex gap-2"><input aria-label="New task" required value={newTask} onChange={event => setNewTask(event.target.value)} disabled={loading || pending} placeholder="What needs your attention?" className="min-w-0 flex-1 rounded-xl border border-white/10 bg-[#101419] px-3 py-3 text-sm text-white placeholder:text-gray-500" /><button type="submit" aria-label="Add task" disabled={loading || pending || !newTask.trim()} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#d4c17a] text-black disabled:opacity-40"><Plus size={18} /></button></form>
+      {pending && <p role="status" className="text-xs text-gray-400">Saving task…</p>}
+    </div>}
+  </section>;
 }

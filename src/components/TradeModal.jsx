@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, ChevronDown } from "lucide-react";
+import useDialog from "../hooks/useDialog";
+import { formatPnl } from "../lib/dashboard";
 
 // Futures contract multipliers ($ per point)
 const SYMBOLS = ["NQ","MNQ","ES","MES","RTY"];
@@ -33,6 +35,9 @@ export default function TradeModal({ onClose, onSave, prefill = null }) {
   });
   const [saving, setSaving]       = useState(false);
   const [symbolOpen, setSymbolOpen] = useState(false);
+  const [error, setError] = useState("");
+  const close = () => { if (!saving) onClose(); };
+  const dialogRef = useDialog(saving ? null : onClose);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -56,20 +61,37 @@ export default function TradeModal({ onClose, onSave, prefill = null }) {
     : autoPnl;
 
   const handleSave = async () => {
-    if (!form.entry) return;
+    if (saving) return;
+    const entry = Number(form.entry);
+    const exit = form.exit === "" ? 0 : Number(form.exit);
+    const contracts = Number(form.contracts);
+    if (!Number.isFinite(entry) || entry <= 0 || !Number.isFinite(exit) || exit < 0 || !Number.isInteger(contracts) || contracts <= 0) {
+      setError("Enter a positive entry price, a valid exit price, and a whole number of contracts.");
+      return;
+    }
+    if (form.useManual && (form.manualPnl === "" || !Number.isFinite(Number(form.manualPnl)))) {
+      setError("Enter a valid profit or loss amount.");
+      return;
+    }
+    setError("");
     setSaving(true);
-    await onSave({
-      symbol:    form.symbol,
-      side:      form.side,
-      entry:     parseFloat(form.entry),
-      exit:      parseFloat(form.exit)   || 0,
-      contracts: parseFloat(form.contracts) || 1,
-      setup:     form.rules.join(", "),
-      notes:     form.notes,
-      pnl:       displayPnl ?? 0,
-    });
-    setSaving(false);
-    onClose();
+    try {
+      await onSave({
+        symbol: form.symbol,
+        side: form.side,
+        entry,
+        exit,
+        contracts,
+        setup: form.rules.join(", "),
+        notes: form.notes,
+        pnl: displayPnl ?? 0,
+      });
+      onClose();
+    } catch (err) {
+      setError(err?.message || "Your trade could not be saved. Please try again.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -77,9 +99,13 @@ export default function TradeModal({ onClose, onSave, prefill = null }) {
       <motion.div
         className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center z-50"
         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-        onClick={onClose}
+        onClick={close}
       >
         <motion.div
+          ref={dialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="trade-modal-title"
           className="bg-[#111] border border-white/5 rounded-t-2xl sm:rounded-2xl p-5 w-full sm:max-w-sm text-white shadow-xl max-h-[92vh] overflow-y-auto"
           initial={{ y: 60, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 60, opacity: 0 }}
           transition={{ duration: 0.25 }}
@@ -87,11 +113,12 @@ export default function TradeModal({ onClose, onSave, prefill = null }) {
         >
           {/* Header */}
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold text-blue-400">{prefill ? "Edit Trade" : "Log Trade"}</h2>
-            <button onClick={onClose} className="text-gray-500 hover:text-white"><X size={18} /></button>
+            <h2 id="trade-modal-title" className="text-xl font-semibold text-white">{prefill ? "Edit Trade" : "Log Trade"}</h2>
+            <button disabled={saving} aria-label="Close trade dialog" onClick={close} className="icon-button"><X size={18} /></button>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-4">
+            {error && <p role="alert" className="text-sm text-red-300 rounded-xl border border-red-400/20 bg-red-400/10 p-3">{error}</p>}
             {/* Symbol dropdown + Side */}
             <div className="flex gap-2">
               {/* Symbol */}
@@ -129,6 +156,7 @@ export default function TradeModal({ onClose, onSave, prefill = null }) {
                   {["Long","Short"].map(s => (
                     <button
                       key={s}
+                      aria-pressed={form.side === s}
                       onClick={() => set("side", s)}
                       className={`px-4 py-2.5 text-sm font-medium transition ${
                         form.side === s
@@ -150,6 +178,9 @@ export default function TradeModal({ onClose, onSave, prefill = null }) {
                   <label className="text-xs text-gray-500 block mb-1">{label}</label>
                   <input
                     type="number"
+                    aria-label={label}
+                    step={key === "contracts" ? "1" : "any"}
+                    min={key === "contracts" ? "1" : "0"}
                     value={form[key]}
                     onChange={e => set(key, e.target.value)}
                     placeholder={ph}
@@ -166,7 +197,7 @@ export default function TradeModal({ onClose, onSave, prefill = null }) {
                 <label className="text-xs text-gray-500">P&amp;L</label>
                 <button
                   onClick={() => set("useManual", !form.useManual)}
-                  className="text-xs text-gray-600 hover:text-blue-400 transition"
+                  className="text-xs text-gray-400 hover:text-blue-400 transition"
                 >
                   {form.useManual ? "Use auto-calc" : "Enter manually"}
                 </button>
@@ -176,6 +207,8 @@ export default function TradeModal({ onClose, onSave, prefill = null }) {
                 <div className="relative">
                   <input
                     type="number"
+                    aria-label="Manual profit or loss"
+                    step="any"
                     value={form.manualPnl}
                     onChange={e => set("manualPnl", e.target.value)}
                     placeholder="e.g. 320 or -150"
@@ -192,13 +225,13 @@ export default function TradeModal({ onClose, onSave, prefill = null }) {
                     }`}
                     initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                   >
-                    <span className="text-lg font-bold">{autoPnl >= 0 ? "+" : ""}${autoPnl.toLocaleString()}</span>
+                    <span className="text-lg font-bold">{formatPnl(autoPnl)}</span>
                     <span className="text-xs ml-2 opacity-60">
                       {Math.abs(parseFloat(form.exit) - parseFloat(form.entry)).toFixed(2)} pts x {form.contracts} contract{form.contracts !== "1" ? "s" : ""} x ${MULTIPLIER[form.symbol]}/pt
                     </span>
                   </motion.div>
                 ) : (
-                  <p className="text-xs text-gray-600 bg-[#1a1a1a] border border-white/5 rounded-xl px-3 py-2.5">
+                  <p className="text-xs text-gray-400 bg-[#1a1a1a] border border-white/5 rounded-xl px-3 py-2.5">
                     Enter entry + exit to auto-calculate
                   </p>
                 )
@@ -212,6 +245,7 @@ export default function TradeModal({ onClose, onSave, prefill = null }) {
                 {RULES.map(r => (
                   <button
                     key={r}
+                    aria-pressed={form.rules.includes(r)}
                     onClick={() => toggleRule(r)}
                     className={`px-3 py-1 rounded-lg text-xs border transition ${
                       form.rules.includes(r)
@@ -240,7 +274,8 @@ export default function TradeModal({ onClose, onSave, prefill = null }) {
 
             <div className="flex gap-2 pt-1">
               <button
-                onClick={onClose}
+                onClick={close}
+                disabled={saving}
                 className="flex-1 py-2.5 rounded-xl text-sm text-gray-500 border border-white/10 hover:border-white/20 transition"
               >
                 Cancel
@@ -248,7 +283,7 @@ export default function TradeModal({ onClose, onSave, prefill = null }) {
               <button
                 onClick={handleSave}
                 disabled={saving || !form.entry}
-                className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-blue-500/15 text-blue-400 border border-blue-500/30 hover:bg-blue-500/25 disabled:opacity-40 transition"
+                className="button-primary flex-1 disabled:opacity-40"
               >
                 {saving ? "Saving..." : "Save Trade"}
               </button>

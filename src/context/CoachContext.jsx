@@ -1,9 +1,9 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { auth, db } from "../firebase";
 import { collection, doc, onSnapshot, query, orderBy, limit } from "firebase/firestore";
+import { readCoachReply } from '../lib/coachResponse';
 
-const CoachContext = createContext(null);
-export const useCoach = () => useContext(CoachContext);
+import { CoachContext } from './useCoach';
 
 const sumStats = stats => {
   const out = {};
@@ -90,7 +90,7 @@ export function CoachProvider({ children }) {
       body: JSON.stringify({ messages: payload, context: coachContext, topic, userName: auth.currentUser?.displayName || "Champion" }),
     });
     const text = await res.text();
-    try { return JSON.parse(text).reply || "Coach error."; } catch { return "Coach error."; }
+    return readCoachReply(text, res.ok);
   };
 
   // JSON plan generation helper

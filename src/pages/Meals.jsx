@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Trash2, ChevronDown, ChevronUp, Send, Loader2, Sparkles } from "lucide-react";
 import { db, auth } from "../firebase";
 import { doc, getDoc, setDoc, addDoc, getDocs, deleteDoc, collection, query, where, orderBy } from "firebase/firestore";
-import { useCoach } from "../context/CoachContext";
+import { useCoach } from "../context/useCoach";
 import MacroSummary from "../components/MacroSummary";
 import MealLogModal from "../components/MealLogModal";
 
@@ -120,7 +120,7 @@ function SetupStep({ step, value, onChange, onNext, onBack, total, loading }) {
       )}
 
       {q.optional && q.type === "textarea" && (
-        <p className="text-xs text-gray-600 mt-2">Optional — skip if none</p>
+        <p className="text-xs text-gray-400 mt-2">Optional — skip if none</p>
       )}
 
       <div className="flex justify-between mt-6">
@@ -137,7 +137,7 @@ function SetupStep({ step, value, onChange, onNext, onBack, total, loading }) {
           className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
             isValid && !loading
               ? "bg-green-500 text-white hover:bg-green-400"
-              : "bg-[#222] text-gray-600 cursor-not-allowed"
+              : "bg-[#222] text-gray-400 cursor-not-allowed"
           }`}
         >
           {loading ? "Generating…" : isLast ? "Generate Plan" : "Next →"}
@@ -159,14 +159,14 @@ function MealChatBar({ onSend, loading }) {
 
   return (
     <div
-      className="fixed left-0 right-0 z-40 px-4"
-      style={{ bottom: "76px" }}
+      className="feature-chat fixed left-0 right-0 z-40 px-4"
     >
       <div className="max-w-lg mx-auto">
         <div className="flex items-center gap-2 bg-[#0f0f0f] border border-green-500/25 rounded-2xl px-4 py-2.5 shadow-lg shadow-black/50">
           <Sparkles size={14} className="text-green-500/50 flex-shrink-0" />
           <input
             ref={inputRef}
+            aria-label="Nutrition plan change request"
             type="text"
             value={msg}
             onChange={e => setMsg(e.target.value)}
@@ -176,11 +176,12 @@ function MealChatBar({ onSend, loading }) {
           />
           <button
             onClick={send}
+            aria-label="Update nutrition plan"
             disabled={!msg.trim() || loading}
             className={`p-1.5 rounded-xl transition ${
               msg.trim() && !loading
                 ? "text-green-400 hover:bg-green-500/15"
-                : "text-gray-700 cursor-not-allowed"
+                : "text-gray-500 cursor-not-allowed"
             }`}
           >
             {loading ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
@@ -205,6 +206,9 @@ export default function Meals() {
   const [view, setView]               = useState("plan");
   const [chatLoading, setChatLoading] = useState(false);
   const [chatStatus, setChatStatus]   = useState(null);
+  const [pageError, setPageError] = useState("");
+  const [deleting, setDeleting] = useState(null);
+  const [resetting, setResetting] = useState(false);
 
   useEffect(() => {
     const unsub = auth.onAuthStateChanged(async u => {
@@ -238,22 +242,31 @@ export default function Meals() {
     if (isLast) {
       const fullForm = { ...setupForm };
       setGenerating(true);
-      const u = auth.currentUser;
-      // Also pull workout profile for better calorie calculation
-      let workoutProfile = null;
+      setPageError("");
       try {
-        const wSnap = await getDoc(doc(db, "users", u.uid, "profile", "info"));
-        if (wSnap.exists()) workoutProfile = wSnap.data();
-      } catch {}
-      await setDoc(doc(db, "users", u.uid, "meal_setup", "info"), { ...fullForm, createdAt: new Date() });
-      setMealSetup(fullForm);
-      const context = workoutProfile
-        ? `User body stats: ${JSON.stringify(workoutProfile)}. Nutrition preferences: ${JSON.stringify(fullForm)}.`
-        : `User nutrition preferences: ${JSON.stringify(fullForm)}.`;
-      const plan = await generatePlan(MEAL_PLAN_PROMPT, `${context} Generate a personalized meal plan.`);
-      if (plan) await setDoc(doc(db, "users", u.uid, "meal_plan", "current"), { ...plan, createdAt: new Date() });
-      setGenerating(false);
-      setView("plan");
+        const u = auth.currentUser;
+        if (!u) throw new Error("Please sign in to create your plan.");
+        // A workout profile is optional; nutrition setup works independently.
+        let workoutProfile = null;
+        try {
+          const wSnap = await getDoc(doc(db, "users", u.uid, "profile", "info"));
+          if (wSnap.exists()) workoutProfile = wSnap.data();
+        } catch { /* Continue with the user's nutrition preferences. */ }
+        await setDoc(doc(db, "users", u.uid, "meal_setup", "info"), { ...fullForm, createdAt: new Date() });
+        const context = workoutProfile
+          ? `User body stats: ${JSON.stringify(workoutProfile)}. Nutrition preferences: ${JSON.stringify(fullForm)}.`
+          : `User nutrition preferences: ${JSON.stringify(fullForm)}.`;
+        const plan = await generatePlan(MEAL_PLAN_PROMPT, `${context} Generate a personalized meal plan.`);
+        if (!plan) throw new Error("No nutrition plan returned");
+        await setDoc(doc(db, "users", u.uid, "meal_plan", "current"), { ...plan, createdAt: new Date() });
+        setMealSetup(fullForm);
+        setView("plan");
+      } catch {
+        setPageError("Your nutrition plan could not be created. Select Generate Plan to try again.");
+        setView("setup");
+      } finally {
+        setGenerating(false);
+      }
     } else {
       setSetupStep(s => s + 1);
     }
@@ -261,7 +274,7 @@ export default function Meals() {
 
   const handleAddMeal = async (mealData) => {
     const u = auth.currentUser;
-    if (!u) return;
+    if (!u) throw new Error("Please sign in to log a meal.");
     const entry = {
       ...mealData,
       date: todayStr(),
@@ -273,38 +286,57 @@ export default function Meals() {
   };
 
   const handleDeleteMeal = async (id) => {
+    if (deleting || !window.confirm("Delete this meal from today's log?")) return;
     const u = auth.currentUser;
     if (!u) return;
-    await deleteDoc(doc(db, "users", u.uid, "meals", id));
-    setLoggedMeals(prev => prev.filter(m => m.id !== id));
+    setDeleting(id);
+    setPageError("");
+    try {
+      await deleteDoc(doc(db, "users", u.uid, "meals", id));
+      setLoggedMeals(prev => prev.filter(m => m.id !== id));
+    } catch {
+      setPageError("Your meal could not be deleted. Please try again.");
+    } finally {
+      setDeleting(null);
+    }
   };
 
   const handleChatModify = async (message) => {
-    if (!plans.meal) return;
+    const u = auth.currentUser;
+    if (!plans.meal || !u || chatLoading) return;
     setChatLoading(true);
-    setChatStatus(`Updating plan: "${message}"…`);
-    const userPrompt = `Current plan: ${JSON.stringify(plans.meal)}. Setup: ${JSON.stringify(mealSetup)}. Today is ${todayDay()}. User request: "${message}". Return the complete updated plan JSON.`;
-    const updated = await generatePlan(MEAL_MODIFY_PROMPT, userPrompt);
-    if (updated) {
-      const u = auth.currentUser;
+    setChatStatus(`Updating plan: "${message}"...`);
+    try {
+      const userPrompt = `Current plan: ${JSON.stringify(plans.meal)}. Setup: ${JSON.stringify(mealSetup)}. Today is ${todayDay()}. User request: "${message}". Return the complete updated plan JSON.`;
+      const updated = await generatePlan(MEAL_MODIFY_PROMPT, userPrompt);
+      if (!updated) throw new Error("No updated plan returned");
       await setDoc(doc(db, "users", u.uid, "meal_plan", "current"), { ...updated, createdAt: new Date() });
       setChatStatus("Plan updated!");
-      setTimeout(() => setChatStatus(null), 2500);
-    } else {
-      setChatStatus("Couldn't update — try again.");
-      setTimeout(() => setChatStatus(null), 3000);
+    } catch {
+      setChatStatus("Could not update your plan. Please try again.");
+    } finally {
+      setChatLoading(false);
+      setTimeout(() => setChatStatus(null), 3500);
     }
-    setChatLoading(false);
   };
 
   const handleNewPlan = async () => {
+    if (resetting || !window.confirm("Replace your nutrition plan and preferences? Your logged meals will be kept.")) return;
     const u = auth.currentUser;
     if (!u) return;
-    await deleteDoc(doc(db, "users", u.uid, "meal_plan", "current"));
-    await deleteDoc(doc(db, "users", u.uid, "meal_setup", "info"));
-    setMealSetup(null);
-    setSetupStep(0);
-    setSetupForm({});
+    setResetting(true);
+    setPageError("");
+    try {
+      await deleteDoc(doc(db, "users", u.uid, "meal_plan", "current"));
+      await deleteDoc(doc(db, "users", u.uid, "meal_setup", "info"));
+      setMealSetup(null);
+      setSetupStep(0);
+      setSetupForm({});
+    } catch {
+      setPageError("Your plan could not be reset. Please try again.");
+    } finally {
+      setResetting(false);
+    }
   };
 
   // ── Loading ──────────────────────────────────────────────────────────────
@@ -329,6 +361,7 @@ export default function Meals() {
             animate={{ width: `${((setupStep + 1) / SETUP_QUESTIONS.length) * 100}%` }}
           />
         </div>
+        {pageError && <p role="alert" className="text-sm text-red-300 mb-4">{pageError}</p>}
         <AnimatePresence mode="wait">
           <SetupStep
             key={setupStep}
@@ -358,15 +391,16 @@ export default function Meals() {
   const todayPlan = plan?.days?.find(d => d.day === todayDay()) || plan?.days?.[0];
 
   return (
-    <div className="min-h-[100dvh] bg-black px-4 pt-6 pb-28">
+    <div className="feature-page">
       <div className="glow-bg glow-meals" />
-      <div className="relative z-10 max-w-lg mx-auto">
+      <div className="relative z-10 feature-content">
 
         {/* Header */}
-        <div className="flex items-center justify-between mb-5">
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
           <div>
             <p className="text-xs text-green-400 tracking-widest uppercase font-display">Meals</p>
-            <h1 className="text-2xl font-bold text-white">Nutrition</h1>
+            <h1 className="page-heading">Nutrition</h1>
+            <p className="page-description">Fuel your progress with a plan that fits your day.</p>
             {targets.calories && (
               <p className="text-xs text-gray-500 mt-0.5">
                 {targets.calories} kcal · {targets.protein}g protein
@@ -376,12 +410,15 @@ export default function Meals() {
           <div className="flex items-center gap-2">
             <button
               onClick={handleNewPlan}
+              disabled={resetting}
               className="text-xs text-gray-500 hover:text-white transition border border-white/10 px-3 py-1.5 rounded-lg"
             >
               New Plan
             </button>
           </div>
         </div>
+
+        {pageError && <p role="alert" className="mb-4 rounded-xl border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-300">{pageError}</p>}
 
         {/* Chat status toast */}
         <AnimatePresence>
@@ -404,12 +441,13 @@ export default function Meals() {
         {/* Macro summary */}
         <MacroSummary meals={loggedMeals} targets={targets} />
 
+        <div className="nutrition-grid">
         {/* Today's Logged Meals */}
-        <div className="bg-[#111] border border-white/5 rounded-2xl p-4 mb-4">
+        <div className="panel p-4 mb-4">
           <div className="flex items-center justify-between mb-3">
             <div>
               <h2 className="text-sm font-semibold text-white">Today's Log</h2>
-              <p className="text-xs text-gray-600 mt-0.5">{todayDay()}</p>
+              <p className="text-xs text-gray-400 mt-0.5">{todayDay()}</p>
             </div>
             <button
               onClick={() => { setPrefillMeal(null); setShowModal(true); }}
@@ -419,7 +457,7 @@ export default function Meals() {
             </button>
           </div>
           {loggedMeals.length === 0 ? (
-            <p className="text-sm text-gray-600 italic">No meals logged yet today.</p>
+            <div className="py-6 text-center"><p className="text-white font-medium">A fresh start for today</p><p className="text-sm text-gray-400 mt-1">Log your first meal to see your daily nutrition take shape.</p><button className="button-secondary mt-4" onClick={() => { setPrefillMeal(null); setShowModal(true); }}>Log your first meal</button></div>
           ) : (
             <div className="space-y-1.5">
               {sortMeals(loggedMeals).map(m => (
@@ -432,10 +470,10 @@ export default function Meals() {
                       {m.name && m.name !== m.mealType && (
                         <span className="text-xs text-gray-400">— {m.name}</span>
                       )}
-                      <span className="text-xs text-gray-700">{m.dayName || todayDay()}</span>
+                      <span className="text-xs text-gray-500">{m.dayName || todayDay()}</span>
                     </div>
                     {m.ingredients && (
-                      <p className="text-xs text-gray-600 mt-0.5 line-clamp-1">{m.ingredients}</p>
+                      <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">{m.ingredients}</p>
                     )}
                     <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                       {m.calories > 0 && <span className="text-xs text-gray-300 font-medium">{m.calories} kcal</span>}
@@ -444,8 +482,8 @@ export default function Meals() {
                       {m.fat      > 0 && <span className="text-xs text-amber-400">{m.fat}g F</span>}
                     </div>
                   </div>
-                  <button onClick={() => handleDeleteMeal(m.id)} className="ml-3 text-gray-600 hover:text-red-400 transition flex-shrink-0 mt-0.5">
-                    <Trash2 size={14} />
+                  <button disabled={deleting !== null} onClick={() => handleDeleteMeal(m.id)} aria-label={`Delete ${m.name || m.mealType || "meal"}`} className="ml-3 text-gray-400 hover:text-red-400 transition flex-shrink-0 mt-0.5">
+                    {deleting === m.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
                   </button>
                 </div>
               ))}
@@ -455,7 +493,7 @@ export default function Meals() {
 
         {/* Today's Suggested Plan */}
         {todayPlan && (
-          <div className="bg-[#111] border border-white/5 rounded-2xl p-4 mb-4">
+          <div className="panel p-4 mb-4">
             <h2 className="text-sm font-semibold text-white mb-3">Suggested — {todayPlan.day}</h2>
             <div className="space-y-2">
               {todayPlan.meals?.map((meal, i) => (
@@ -474,7 +512,7 @@ export default function Meals() {
                   </div>
                   <p className="text-sm text-gray-300 mt-1">{meal.foods?.join(", ")}</p>
                   <div className="flex items-center gap-2 mt-1.5">
-                    <span className="text-xs text-gray-600">{meal.macros?.calories} kcal</span>
+                    <span className="text-xs text-gray-400">{meal.macros?.calories} kcal</span>
                     <span className="text-xs text-green-400/60">{meal.macros?.protein}g P</span>
                   </div>
                 </div>
@@ -483,19 +521,21 @@ export default function Meals() {
           </div>
         )}
 
+        </div>
         {/* Full Week Plan */}
         {plan?.days && (
-          <div className="space-y-2">
-            <h2 className="text-sm font-semibold text-gray-500 mb-2">Weekly Plan</h2>
+          <div className="weekly-grid gap-3 items-start">
+            <h2 className="text-sm font-semibold text-gray-300 mb-2 col-span-full">Your week at a glance</h2>
             {plan.days.map((day, i) => (
-              <div key={i} className="bg-[#111] border border-white/5 rounded-2xl overflow-hidden">
+              <div key={i} className="panel overflow-hidden">
                 <button
                   className="w-full flex items-center justify-between px-4 py-3"
+                  aria-expanded={expandedDay === i}
                   onClick={() => setExpandedDay(expandedDay === i ? null : i)}
                 >
                   <span className={`text-sm font-semibold ${day.day === todayDay() ? "text-green-400" : "text-white"}`}>{day.day}</span>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-600">
+                    <span className="text-xs text-gray-400">
                       {day.meals?.length} meals · {day.meals?.reduce((a, m) => a + (m.macros?.calories || 0), 0)} kcal
                     </span>
                     {expandedDay === i ? <ChevronUp size={14} className="text-gray-500" /> : <ChevronDown size={14} className="text-gray-500" />}
@@ -514,7 +554,7 @@ export default function Meals() {
                           <div key={j} className="py-2">
                             <div className="flex items-center justify-between">
                               <span className="text-xs text-green-400">{m.time} — {m.meal}</span>
-                              <span className="text-xs text-gray-600">{m.macros?.calories} kcal</span>
+                              <span className="text-xs text-gray-400">{m.macros?.calories} kcal</span>
                             </div>
                             <p className="text-sm text-gray-400 mt-0.5">{m.foods?.join(", ")}</p>
                           </div>
@@ -529,7 +569,7 @@ export default function Meals() {
         )}
 
         {!plan && (
-          <div className="bg-[#111] border border-white/5 rounded-2xl p-6 text-center">
+          <div className="panel p-6 text-center">
             <p className="text-gray-500 text-sm mb-3">No meal plan yet.</p>
             <button
               onClick={() => setView("setup")}

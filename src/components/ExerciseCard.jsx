@@ -58,9 +58,9 @@ export default function ExerciseCard({ exercise, history = [], onLog, onSwap, on
     >
       {/* Header row */}
       <div
-        className="flex items-center gap-3 p-4 cursor-pointer"
-        onClick={() => onDetail?.(exercise)}
+        className="flex items-center gap-3 p-4"
       >
+        <button type="button" className="flex min-w-0 flex-1 items-center gap-3 text-left" aria-label={`Open ${exercise.name} details`} onClick={() => onDetail?.(exercise)}>
         {/* Image or placeholder */}
         <div className="w-14 h-14 rounded-xl overflow-hidden bg-[#1a1a1a] flex-shrink-0">
           {img
@@ -86,21 +86,22 @@ export default function ExerciseCard({ exercise, history = [], onLog, onSwap, on
           </div>
         </div>
 
+        </button>
         {/* Actions */}
         <div className="flex items-center gap-2 flex-shrink-0">
           <button
-            onClick={e => { e.stopPropagation(); setShowChart(c => !c); }}
+            aria-label={`History for ${exercise.name}`} aria-expanded={showChart} onClick={e => { e.stopPropagation(); setShowChart(c => !c); }}
             className="p-1.5 rounded-lg text-gray-500 hover:text-yellow-400 transition"
           >
             <BarChart3 size={16} />
           </button>
           <button
-            onClick={e => { e.stopPropagation(); setShowSwap(s => !s); }}
+            aria-label={`Swap ${exercise.name}`} aria-expanded={showSwap} onClick={e => { e.stopPropagation(); setShowSwap(s => !s); }}
             className="p-1.5 rounded-lg text-gray-500 hover:text-blue-400 transition"
           >
             <RefreshCw size={16} />
           </button>
-          <button onClick={e => { e.stopPropagation(); setExpanded(v => !v); }} className="p-1 -mr-1">
+          <button aria-label={`Log sets for ${exercise.name}`} aria-expanded={expanded} onClick={e => { e.stopPropagation(); setExpanded(v => !v); }} className="p-1 -mr-1">
             {expanded ? <ChevronUp size={16} className="text-gray-500" /> : <ChevronDown size={16} className="text-gray-500" />}
           </button>
         </div>

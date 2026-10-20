@@ -1,5 +1,4 @@
 import {
-  getAuth,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
@@ -73,7 +72,7 @@ export const saveUserProfile = async (user) => {
 export const logout = async () => {
   try {
     await signOut(auth);
-  } catch (error) {
+  } catch {
     throw new Error("Error logging out. Try again.");
   }
 };

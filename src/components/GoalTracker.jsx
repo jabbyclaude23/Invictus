@@ -1,262 +1,82 @@
-import React, { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Trash2, Edit2, Check, ChevronDown, ChevronUp } from "lucide-react";
-import {
-  collection,
-  addDoc,
-  getDocs,
-  updateDoc,
-  deleteDoc,
-  doc,
-  query,
-  orderBy,
-} from "firebase/firestore";
+import { useEffect, useRef, useState } from "react";
+import { Plus, Minus, Trash2, Edit2, Check, ChevronDown, X } from "lucide-react";
+import { collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, orderBy } from "firebase/firestore";
 import { db, auth } from "../firebase";
-import confetti from "canvas-confetti";
 
+const iconButton = "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/[0.07] text-gray-400 hover:bg-white/5 hover:text-[#d4c17a] disabled:opacity-30";
+const field = "min-h-11 min-w-0 rounded-xl border border-white/10 bg-[#101419] px-3 text-sm text-white";
 export default function GoalTracker() {
   const [goals, setGoals] = useState([]);
   const [newGoal, setNewGoal] = useState("");
   const [target, setTarget] = useState("");
   const [editingId, setEditingId] = useState(null);
   const [tempProgress, setTempProgress] = useState("");
-  const [expanded, setExpanded] = useState(false);
-
-  const fireConfetti = () => {
-    confetti({
-      particleCount: 40,
-      spread: 70,
-      startVelocity: 25,
-      gravity: 1.1,
-      colors: ["#facc15", "#fef08a", "#eab308"],
-      ticks: 70,
-      origin: { y: 0.8 },
-    });
-  };
-
+  const [expanded, setExpanded] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
+  const busy = useRef(false);
   useEffect(() => {
-    const fetchGoals = async () => {
-      const user = auth.currentUser;
-      if (!user) return;
-      const q = query(
-        collection(db, "users", user.uid, "goals"),
-        orderBy("createdAt")
-      );
-      const snapshot = await getDocs(q);
-      const data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-      setGoals(data);
-    };
-    fetchGoals();
+    let active = true;
+    async function load() {
+      try {
+        if (!auth.currentUser) throw new Error();
+        const snapshot = await getDocs(query(collection(db, "users", auth.currentUser.uid, "goals"), orderBy("createdAt")));
+        if (active) setGoals(snapshot.docs.map(item => ({ ...item.data(), id: item.id })));
+      } catch { if (active) setError("Couldn't load your goals. Refresh to try again."); }
+      finally { if (active) setLoading(false); }
+    }
+    load();
+    return () => { active = false; };
   }, []);
-
-  const handleAdd = async () => {
-    const user = auth.currentUser;
-    if (!user || !newGoal.trim() || !target) return;
-
-    const newItem = {
-      name: newGoal.trim(),
-      progress: 0,
-      target: parseFloat(target),
-      createdAt: new Date(),
-    };
-
-    const docRef = await addDoc(
-      collection(db, "users", user.uid, "goals"),
-      newItem
-    );
-    setGoals([...goals, { id: docRef.id, ...newItem }]);
-    setNewGoal("");
-    setTarget("");
-  };
-
-  const handleProgressChange = async (goal, delta) => {
-    const user = auth.currentUser;
-    if (!user) return;
-
-    const newProgress = Math.max(0, Math.min(goal.progress + delta, goal.target));
-    await updateDoc(doc(db, "users", user.uid, "goals", goal.id), {
-      progress: newProgress,
+  async function mutate(action) {
+    if (busy.current || loading) return;
+    busy.current = true; setPending(true); setError("");
+    try { if (!auth.currentUser) throw new Error(); await action(auth.currentUser.uid); }
+    catch { setError("Couldn't save your goal. Please try again."); }
+    finally { busy.current = false; setPending(false); }
+  }
+  function add(event) {
+    event.preventDefault();
+    const number = Number(target);
+    if (!newGoal.trim()) { setError("Give your goal a name."); return; }
+    if (!Number.isFinite(number) || number <= 0) { setError("Choose a target greater than zero."); return; }
+    mutate(async uid => {
+      const item = { name: newGoal.trim(), progress: 0, target: number, createdAt: new Date() };
+      const result = await addDoc(collection(db, "users", uid, "goals"), item);
+      setGoals(current => [...current, { ...item, id: result.id }]);
+      setNewGoal(""); setTarget("");
     });
-    setGoals(
-      goals.map((g) =>
-        g.id === goal.id ? { ...g, progress: newProgress } : g
-      )
-    );
-
-    if (newProgress === goal.target) fireConfetti();
-  };
-
-  const handleDelete = async (id) => {
-    const user = auth.currentUser;
-    if (!user) return;
-
-    await deleteDoc(doc(db, "users", user.uid, "goals", id));
-    setGoals(goals.filter((g) => g.id !== id));
-  };
-
-  const handleEditStart = (goal) => {
-    setEditingId(goal.id);
-    setTempProgress(goal.progress);
-  };
-
-  const handleSaveEdit = async (goal) => {
-    const user = auth.currentUser;
-    if (!user) return;
-
-    const newVal = parseFloat(tempProgress) || 0;
-    await updateDoc(doc(db, "users", user.uid, "goals", goal.id), {
-      progress: newVal,
+  }
+  function changeProgress(goal, value) {
+    const number = Number(value);
+    if (value === "" || !Number.isFinite(number) || number < 0 || number > goal.target) {
+      setError(`Enter progress between 0 and ${goal.target}.`); return;
+    }
+    mutate(async uid => {
+      await updateDoc(doc(db, "users", uid, "goals", goal.id), { progress: number });
+      setGoals(current => current.map(item => item.id === goal.id ? { ...item, progress: number } : item));
+      setEditingId(null);
     });
-
-    setGoals(
-      goals.map((g) =>
-        g.id === goal.id ? { ...g, progress: newVal } : g
-      )
-    );
-    setEditingId(null);
-
-    if (newVal >= goal.target) fireConfetti();
-  };
-
-  return (
-    <motion.div
-      className="bg-[#111] border border-[#222] rounded-2xl p-4 shadow-lg shadow-black/40 mb-10"
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-    >
-      <button
-        onClick={() => setExpanded((value) => !value)}
-        className="flex w-full items-center justify-between text-left"
-        aria-expanded={expanded}
-      >
-        <h2 className="text-lg font-semibold text-yellow-400">
-          Mini Goals
-        </h2>
-        {expanded ? (
-          <ChevronUp size={18} className="text-yellow-400" />
-        ) : (
-          <ChevronDown size={18} className="text-yellow-400" />
-        )}
-      </button>
-
-      {expanded && (goals.length === 0 ? (
-        <p className="text-gray-500 italic text-sm mb-3">
-          No goals yet — add one below.
-        </p>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-          {goals.map((goal) => {
-            const percent = Math.min((goal.progress / goal.target) * 100, 100);
-            const isComplete = percent >= 100;
-
-            return (
-              <motion.div
-                key={goal.id}
-                initial={{ opacity: 0, y: 5 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={`bg-[#1a1a1a] border border-[#333] rounded-xl p-3 ${
-                  isComplete ? "shadow-yellow-400/30" : ""
-                }`}
-              >
-                <div className="flex justify-between items-center mb-1">
-                  <h3
-                    className={`text-yellow-400 font-semibold truncate ${
-                      isComplete ? "line-through text-gray-400" : ""
-                    }`}
-                  >
-                    {goal.name}
-                  </h3>
-                  <div className="flex items-center space-x-2">
-                    {editingId === goal.id ? (
-                      <>
-                        <input
-                          type="number"
-                          value={tempProgress}
-                          onChange={(e) => setTempProgress(e.target.value)}
-                          className="w-16 bg-[#222] border border-[#333] rounded-md px-2 py-1 text-sm text-white focus:outline-none focus:border-yellow-400"
-                        />
-                        <button
-                          onClick={() => handleSaveEdit(goal)}
-                          className="text-yellow-400 hover:text-yellow-300"
-                        >
-                          <Check size={16} />
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          onClick={() => handleProgressChange(goal, -1)}
-                          className="text-yellow-400 border border-yellow-400 px-2 py-0.5 rounded-md text-xs font-bold hover:bg-yellow-400 hover:text-black transition"
-                        >
-                          –
-                        </button>
-                        <span className="text-sm text-gray-300">
-                          {goal.progress}/{goal.target}
-                        </span>
-                        <button
-                          onClick={() => handleProgressChange(goal, +1)}
-                          className="bg-yellow-400 text-black px-2 py-0.5 rounded-md text-xs font-bold hover:bg-yellow-300 transition"
-                        >
-                          +
-                        </button>
-                        <button
-                          onClick={() => handleEditStart(goal)}
-                          className="text-gray-400 hover:text-yellow-400 transition"
-                        >
-                          <Edit2 size={14} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(goal.id)}
-                          className="text-gray-500 hover:text-red-400 transition"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                <div className="relative w-full bg-[#222] h-2 rounded-full overflow-hidden">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${percent}%` }}
-                    transition={{ duration: 0.5 }}
-                    className={`h-2 ${
-                      isComplete
-                        ? "bg-green-400"
-                        : "bg-gradient-to-r from-yellow-400 to-yellow-300"
-                    }`}
-                  />
-                </div>
-              </motion.div>
-            );
-          })}
-        </div>
-      ))}
-
-      {/* Add New Goal Row */}
-      {expanded && <div className="flex flex-wrap items-center justify-between gap-2">
-        <input
-          type="text"
-          value={newGoal}
-          onChange={(e) => setNewGoal(e.target.value)}
-          placeholder="Goal name..."
-          className="flex-1 min-w-[120px] bg-[#1a1a1a] border border-[#333] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-yellow-400"
-        />
-        <input
-          type="number"
-          value={target}
-          onChange={(e) => setTarget(e.target.value)}
-          placeholder="Target"
-          className="w-24 bg-[#1a1a1a] border border-[#333] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-yellow-400"
-        />
-        <button
-          onClick={handleAdd}
-          className="bg-yellow-400 text-black px-3 py-1.5 rounded-lg text-sm font-semibold hover:bg-yellow-300 transition"
-        >
-          <Plus size={14} />
-        </button>
-      </div>}
-    </motion.div>
-  );
+  }
+  return <section className="panel p-5 sm:p-6" aria-busy={loading || pending}>
+    <h2><button type="button" onClick={() => setExpanded(value => !value)} aria-expanded={expanded} aria-controls="mini-goals" className="flex w-full items-center justify-between text-left text-[15px] font-semibold text-white">Mini goals<ChevronDown size={17} className={`text-gray-500 ${expanded ? "rotate-180" : ""}`} /></button></h2>
+    <p className="mt-1 text-xs leading-5 text-gray-400">Turn a bigger ambition into measurable steps.</p>
+    {error && <p role="alert" className="mt-3 text-xs text-red-300">{error}</p>}
+    {expanded && <div id="mini-goals" className="mt-5 space-y-4">
+      {loading ? <p role="status" className="text-sm text-gray-400">Loading goals…</p> : !goals.length ? <p className="text-sm leading-6 text-gray-400">Start small. Name a goal and set a target to track.</p> : <ul className="grid gap-3 sm:grid-cols-2">{goals.map(goal => {
+        const progress = Number(goal.progress) || 0;
+        const goalTarget = Number(goal.target);
+        const percent = goalTarget > 0 ? Math.max(0, Math.min(progress / goalTarget * 100, 100)) : 0;
+        return <li key={goal.id} className="min-w-0 rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+          <div className="flex items-start justify-between gap-2"><h3 className="break-words text-sm font-medium leading-6 text-gray-200">{goal.name}</h3><button type="button" aria-label={`Delete goal: ${goal.name}`} disabled={pending} onClick={() => { if (window.confirm(`Delete "${goal.name}" and its progress?`)) mutate(async uid => { await deleteDoc(doc(db, "users", uid, "goals", goal.id)); setGoals(current => current.filter(item => item.id !== goal.id)); if (editingId === goal.id) setEditingId(null); }); }} className="flex h-7 w-7 shrink-0 items-center justify-center text-gray-500 hover:text-red-300 disabled:opacity-40"><Trash2 size={14} /></button></div>
+          <div className="my-3 flex items-center justify-between gap-3 text-xs"><span className={percent >= 100 ? "text-emerald-300" : "text-gray-400"}>{percent >= 100 ? "Complete" : "In progress"}</span><span className="tabular-nums text-[#d4c17a]">{progress} / {goal.target}</span></div>
+          <progress aria-label={`${goal.name} progress`} value={percent} max={100} className="h-1.5 w-full accent-[#d4c17a]" />
+          {editingId === goal.id ? <form onSubmit={event => { event.preventDefault(); changeProgress(goal, tempProgress); }} className="mt-4 flex gap-2"><input aria-label={`Progress for ${goal.name}`} type="number" min="0" max={goal.target} step="any" required value={tempProgress} onChange={event => setTempProgress(event.target.value)} disabled={pending} className={`${field} w-full flex-1`} /><button type="submit" aria-label="Save goal progress" disabled={pending} className={iconButton}><Check size={15} /></button><button type="button" aria-label="Cancel editing goal" disabled={pending} onClick={() => setEditingId(null)} className={iconButton}><X size={15} /></button></form> : <div className="mt-4 flex items-center gap-2"><button type="button" aria-label={`Decrease ${goal.name} progress by one`} disabled={pending || progress <= 0 || goalTarget <= 0} onClick={() => changeProgress(goal, Math.max(0, progress - 1))} className={iconButton}><Minus size={15} /></button><button type="button" aria-label={`Increase ${goal.name} progress by one`} disabled={pending || progress >= goalTarget || goalTarget <= 0} onClick={() => changeProgress(goal, Math.min(goalTarget, progress + 1))} className={iconButton}><Plus size={15} /></button><button type="button" aria-label={`Edit ${goal.name} progress`} disabled={pending} onClick={() => { setEditingId(goal.id); setTempProgress(String(progress)); }} className="ml-auto flex min-h-10 items-center gap-2 rounded-lg px-2 text-xs text-gray-400 hover:text-[#d4c17a] disabled:opacity-40"><Edit2 size={13} />Edit</button></div>}
+        </li>;
+      })}</ul>}
+      <form onSubmit={add} className="flex flex-wrap gap-2"><input aria-label="New goal name" required value={newGoal} onChange={event => setNewGoal(event.target.value)} disabled={loading || pending} placeholder="Name your next goal" className={`${field} flex-1 basis-36`} /><input aria-label="Goal target, greater than zero" type="number" required min="0.00000001" step="any" value={target} onChange={event => setTarget(event.target.value)} disabled={loading || pending} placeholder="Target" className={`${field} w-24`} /><button type="submit" aria-label="Add goal" disabled={loading || pending} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#d4c17a] text-black disabled:opacity-40"><Plus size={18} /></button></form>
+      {pending && <p role="status" className="text-xs text-gray-400">Saving goal…</p>}
+    </div>}
+  </section>;
 }

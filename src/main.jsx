@@ -1,4 +1,4 @@
-import React from "react";
+import React, { lazy, Suspense } from "react";
 import ReactDOM from "react-dom/client";
 import {
   createBrowserRouter,
@@ -8,11 +8,11 @@ import {
 import { CoachProvider } from "./context/CoachContext.jsx";   // ⬅️ add
 import MainLayout from "./layout/MainLayout";
 import Auth from "./pages/Auth";
-import Dashboard from "./pages/Dashboard";
-import Workout from "./pages/Workout";
-import Meals from "./pages/Meals";
-import Trading from "./pages/Trading";
-import Coach from "./pages/Coach";
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Workout = lazy(() => import("./pages/Workout"));
+const Meals = lazy(() => import("./pages/Meals"));
+const Trading = lazy(() => import("./pages/Trading"));
+const Coach = lazy(() => import("./pages/Coach"));
 import ProtectedRoute from "./components/ProtectedRoute";
 import { registerSW } from "virtual:pwa-register";
 import "./index.css";
@@ -31,11 +31,11 @@ const router = createBrowserRouter([
       </ProtectedRoute>
     ),
     children: [
-      { path: "/", element: <Dashboard /> },
-      { path: "/workout", element: <Workout /> },
-      { path: "/meals", element: <Meals /> },
-      { path: "/trading", element: <Trading /> },
-      { path: "/coach", element: <Coach /> },
+      { path: "/", element: <Suspense fallback={<div className="dashboard-loading" role="status">Loading your workspace...</div>}><Dashboard /></Suspense> },
+      { path: "/workout", element: <Suspense fallback={<div className="dashboard-loading" role="status">Loading your workspace...</div>}><Workout /></Suspense> },
+      { path: "/meals", element: <Suspense fallback={<div className="dashboard-loading" role="status">Loading your workspace...</div>}><Meals /></Suspense> },
+      { path: "/trading", element: <Suspense fallback={<div className="dashboard-loading" role="status">Loading your workspace...</div>}><Trading /></Suspense> },
+      { path: "/coach", element: <Suspense fallback={<div className="dashboard-loading" role="status">Loading your workspace...</div>}><Coach /></Suspense> },
     ],
   },
   { path: "/auth", element: <Auth /> },

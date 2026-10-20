@@ -1,3 +1,4 @@
+import useDialog from '../hooks/useDialog';
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { addDoc, doc, updateDoc, collection } from "firebase/firestore";
@@ -13,6 +14,8 @@ export default function AddHabitModal({ habitToEdit = null, onClose, onAdd, onUp
   const [customEmoji, setCustomEmoji] = useState("");
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const dialogRef = useDialog(loading ? null : onClose);
 
   const isEditing = !!habitToEdit;
 
@@ -25,13 +28,17 @@ export default function AddHabitModal({ habitToEdit = null, onClose, onAdd, onUp
       setSelectedIcon(habitToEdit.icon || Object.keys(iconMap)[0]);
       setCustomEmoji(habitToEdit.emoji || "");
     }
-  }, [habitToEdit]);
+  }, [habitToEdit, isEditing]);
 
   // 🔹 Add or Update Habit
   const handleSave = async () => {
-    if (!name.trim()) return;
+    if (loading) return;
+    if (!name.trim()) { setError("Please enter a name."); return; }
+    if (target && (!Number.isFinite(Number(target)) || Number(target) <= 0)) { setError("Enter a daily target greater than zero."); return; }
+    setError("");
     setLoading(true);
     const user = auth.currentUser;
+    if (!user) { setError("Please sign in again."); setLoading(false); return; }
 
     const habitData = {
       name: name.trim(),
@@ -59,8 +66,8 @@ export default function AddHabitModal({ habitToEdit = null, onClose, onAdd, onUp
       }
 
       onClose();
-    } catch (e) {
-      console.error("Error saving habit:", e);
+    } catch {
+      setError("Your habit could not be saved. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -75,7 +82,8 @@ export default function AddHabitModal({ habitToEdit = null, onClose, onAdd, onUp
         exit={{ opacity: 0 }}
       >
         <motion.div
-          className="bg-[#111] border border-[#222] rounded-2xl p-6 w-[90%] max-w-sm text-white shadow-xl shadow-black/50"
+        ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="habit-dialog-title"
+          className="bg-[#111] border border-[#222] rounded-2xl p-6 w-[90%] max-w-md overflow-y-auto text-white shadow-xl shadow-black/50"
           initial={{ scale: 0.9, opacity: 0, y: 20 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.95, opacity: 0, y: 20 }}
@@ -83,24 +91,25 @@ export default function AddHabitModal({ habitToEdit = null, onClose, onAdd, onUp
         >
           {/* Header */}
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-semibold text-yellow-400">
+            <h2 id="habit-dialog-title" className="text-xl font-semibold text-yellow-400">
               {isEditing ? "Edit Habit" : "Add New Habit"}
             </h2>
             <button
-              onClick={onClose}
+              aria-label="Close habit dialog" disabled={loading} onClick={onClose}
               className="text-gray-400 hover:text-yellow-400 text-lg font-bold"
             >
               ✕
             </button>
           </div>
 
+          {error && <p role="alert" className="status-error">{error}</p>}
           {/* Form Inputs */}
           <div className="space-y-4">
             {/* Name */}
             <div>
               <label className="block text-sm text-gray-400 mb-1">Habit Name</label>
               <input
-                value={name}
+                aria-label="Name" value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="w-full bg-[#222] border border-[#333] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-yellow-400"
                 placeholder="e.g. Workout, Drink Water"
@@ -113,7 +122,7 @@ export default function AddHabitModal({ habitToEdit = null, onClose, onAdd, onUp
                 Description (optional)
               </label>
               <input
-                value={description}
+                aria-label="Description" value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 className="w-full bg-[#222] border border-[#333] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-yellow-400"
                 placeholder="e.g. 8 cups, 30 min workout"
@@ -127,7 +136,7 @@ export default function AddHabitModal({ habitToEdit = null, onClose, onAdd, onUp
               </label>
               <input
                 type="number"
-                value={target}
+                aria-label="Daily target" value={target}
                 onChange={(e) => setTarget(e.target.value)}
                 placeholder="e.g. 8 cups"
                 className="w-full bg-[#222] border border-[#333] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-yellow-400"
@@ -140,7 +149,7 @@ export default function AddHabitModal({ habitToEdit = null, onClose, onAdd, onUp
             {/* Icon Selector */}
             <div>
               <label className="block text-sm text-gray-400 mb-2">Icon</label>
-              <div className="flex space-x-2 overflow-x-auto scrollbar-hide relative">
+              <div className="flex flex-wrap gap-2 relative">
                 {Object.entries(iconMap)
                   .filter(([key]) => key !== "chart" && key !== "delete")
                   .map(([key, icon]) => (
@@ -173,9 +182,9 @@ export default function AddHabitModal({ habitToEdit = null, onClose, onAdd, onUp
                   ))}
 
                 {showEmojiPicker && (
-                  <div className="absolute top-12 left-0 z-50 bg-[#111] border border-[#333] rounded-xl shadow-lg p-2">
+                  <div className="relative w-full z-50 bg-[#111] border border-[#333] rounded-xl shadow-lg p-2">
                     <EmojiPicker
-                      theme="dark"
+                      theme="dark" width="100%" height={320}
                       onEmojiClick={(emojiData) => {
                         setCustomEmoji(emojiData.emoji);
                         setShowEmojiPicker(false);
@@ -189,7 +198,7 @@ export default function AddHabitModal({ habitToEdit = null, onClose, onAdd, onUp
             {/* Actions */}
             <div className="flex justify-end space-x-2 mt-4">
               <button
-                onClick={onClose}
+                disabled={loading} onClick={onClose}
                 className="px-3 py-1.5 text-sm text-gray-400 hover:text-yellow-400"
               >
                 Cancel
