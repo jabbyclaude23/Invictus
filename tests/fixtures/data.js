@@ -1,3 +1,4 @@
+import { localDayKey } from '../../src/lib/dashboard.js';
 // Local UI test data only. Never loaded by the production Vite configuration.
 export const fixtureUser = { uid: 'local-preview-user', displayName: 'Alex Morgan', email: 'alex@example.test', photoURL: null, emailVerified: true };
 export const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -36,9 +37,11 @@ export function seedData(empty = false) {
     for (let i = 1; i <= 7; i++) { const day = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10); put(`habits/${id}/progress/${day}`, { progress: Math.round(target * (0.4 + i / 15)), date: day }); }
   });
   [ ['weight', 'Body weight', 78.4, 'weight'], ['steps', 'Daily steps', 8420, 'walk'], ['sleep', 'Sleep hours', 7.5, 'moon'] ].forEach(([id, name, value, icon]) => {
-    put(`stats/${id}`, { name, value, icon, createdAt: now, updatedAt: now });
+    put(`stats/${id}`, { name, value, unit:id === 'weight' ? 'kg' : id === 'steps' ? 'steps' : 'hours', target:id === 'steps' ? 10000 : null,direction:id === 'steps' ? 'increase' : 'track', icon, createdAt: now, updatedAt: now });
     for (let i = 0; i < 7; i++) { const day = new Date(Date.now() - i * 86400000).toDateString(); put(`stats/${id}/history/${day}`, { date: day, value: value - i * (id === 'steps' ? 110 : 0.1) }); }
   });
+  put('goals/health', {name:'Feel strong, focused, and confident in my daily life',why:'Have more energy for my family and my work',nextAction:'Protect three training sessions this week',targetDate:'',status:'active',createdAt:now});
+  for(let i=0;i<5;i++){const day=new Date();day.setDate(day.getDate()-i);const date=localDayKey(day);put(`daily_checkins/${date}`, {date,priorities:[{text:'Finish the most important project step',done:i>0},{text:'Train or take a walk',done:true},{text:'Protect time to wind down',done:i>0}],focusMinutes:90+i*15,sleepHours:7+i*.1,energy:4,reflection:'A clear first task made it easier to begin.',createdAt:day,updatedAt:day});}
   put('goals/strength', { name: 'Complete 16 training sessions', progress: 9, target: 16, createdAt: now });
   put('goals/reading', { name: 'Read 4 books this month', progress: 2, target: 4, createdAt: now });
   put('todos/review', { text: 'Review this week’s training plan', done: true, createdAt: now });

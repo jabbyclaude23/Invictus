@@ -12,7 +12,7 @@ function createSession(user) {
     const greeting = doc(collection(session, "messages"));
     const batch = writeBatch(db);
     batch.set(session, { title: "Active Session", createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
-    batch.set(greeting, { role: "assistant", content: `Welcome back ${user.displayName || "Champion"} — let's lock in. What do you want to focus on today?`, createdAt: serverTimestamp() });
+    batch.set(greeting, { role: "assistant", content: `Hi${user.displayName ? ` ${user.displayName.split(" ")[0]}` : ""}. How are things feeling today? We can talk through what's on your mind and find a small next step together.`, createdAt: serverTimestamp() });
     await batch.commit();
     return session.id;
   })().finally(() => pendingSessions.delete(user.uid));

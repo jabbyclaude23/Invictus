@@ -4,7 +4,7 @@
  *
  * Supported query params:
  *   ?type=name&q=bench+press&limit=5        → search by name
- *   ?type=bodyPart&q=CHEST&limit=20         → exercises for a bodyPart (UPPERCASE)
+ *   ?type=bodyPart&q=CHEST&limit=20         → exercises for a body part
  *   ?type=detail&id=exr_xxx                 → single exercise (video + instructions)
  *   ?type=bodyParts                         → list all body parts
  */
@@ -22,13 +22,19 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "EXERCISEDB_API_KEY env var not set" });
   }
 
-  const { type, q, id, limit = "15", offset = "0" } = req.query;
+  const { type, q, id, limit = "25", after, equipment } = req.query;
+  const boundedLimit = String(Math.max(1, Math.min(25, parseInt(limit, 10) || 25)));
+  const listParams = new URLSearchParams({ limit: boundedLimit });
+  if (typeof after === "string") listParams.set("after", after.slice(0, 160));
+  if (typeof equipment === "string") listParams.set("equipments", equipment.slice(0, 120));
 
   let url;
   if (type === "name" && q) {
-    url = `${BASE_URL}/exercises?name=${encodeURIComponent(q)}&limit=${limit}&offset=${offset}`;
+    listParams.set("name", String(q).slice(0, 180));
+    url = `${BASE_URL}/exercises?${listParams}`;
   } else if (type === "bodyPart" && q) {
-    url = `${BASE_URL}/exercises?bodyPart=${encodeURIComponent(q.toUpperCase())}&limit=${limit}&offset=${offset}`;
+    listParams.set("bodyParts", String(q).slice(0, 120));
+    url = `${BASE_URL}/exercises?${listParams}`;
   } else if (type === "detail" && id) {
     url = `${BASE_URL}/exercises/${encodeURIComponent(id)}`;
   } else if (type === "bodyParts") {
@@ -39,6 +45,7 @@ export default async function handler(req, res) {
 
   try {
     const r = await fetch(url, {
+      signal: AbortSignal.timeout(8000),
       headers: {
         "x-rapidapi-key":  apiKey,
         "x-rapidapi-host": API_HOST,
@@ -47,8 +54,8 @@ export default async function handler(req, res) {
     });
 
     if (!r.ok) {
-      const text = await r.text();
-      return res.status(r.status).json({ error: `API ${r.status}: ${text.slice(0, 300)}` });
+      res.setHeader("Cache-Control", "no-store");
+      return res.status(r.status).json({ error: "Exercise demonstrations are temporarily unavailable." });
     }
 
     const json = await r.json();
@@ -57,11 +64,13 @@ export default async function handler(req, res) {
     // list  → { data: [...] }
     // detail → { data: {...} }
     if (!json.success) {
-      return res.status(400).json({ error: json.message || "API error" });
+      res.setHeader("Cache-Control", "no-store");
+      return res.status(502).json({ error: "Exercise demonstrations are temporarily unavailable." });
     }
 
     return res.json({ data: json.data, meta: json.meta || null });
-  } catch (e) {
-    return res.status(500).json({ error: e.message });
+  } catch {
+    res.setHeader("Cache-Control", "no-store");
+    return res.status(502).json({ error: "Exercise demonstrations are temporarily unavailable." });
   }
 }

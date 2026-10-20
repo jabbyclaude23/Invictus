@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { auth, db } from "../firebase";
 import { collection, doc, onSnapshot, query, orderBy, limit } from "firebase/firestore";
 import { readCoachReply } from '../lib/coachResponse';
+import { localDayKey } from '../lib/dashboard';
 
 import { CoachContext } from './useCoach';
 
@@ -21,7 +22,7 @@ const sumTrading = a => [...a].sort((x,y)=>(y?.time?.seconds||0)-(x?.time?.secon
 
 export function CoachProvider({ children }) {
   const [user, setUser]   = useState(null);
-  const [raw, setRaw]     = useState({ stats:[], habits:[], workouts:[], meals:[], trading:[] });
+  const [raw, setRaw]     = useState({ stats:[], habits:[], workouts:[], meals:[], trading:[], dailyCheckins:[], goals:[] });
   const [plans, setPlans] = useState({ workout: null, meal: null });
   const [ready, setReady] = useState(false);
 
@@ -31,6 +32,9 @@ export function CoachProvider({ children }) {
   }, []);
 
   useEffect(() => {
+    setRaw({ stats:[], habits:[], workouts:[], meals:[], trading:[], dailyCheckins:[], goals:[] });
+    setPlans({ workout: null, meal: null });
+    setReady(false);
     if (!user) return;
     const unsubs = [];
 
@@ -38,10 +42,10 @@ export function CoachProvider({ children }) {
       console.warn(`[CoachContext] ${name} snapshot error:`, err?.code, err?.message);
     };
 
-    const col = (name, setter) => {
+    const col = (name, setter, field = "createdAt", count = 200) => {
       // Use getDocs fallback if onSnapshot fails (e.g. expired rules)
       try {
-        const q = query(collection(db, "users", user.uid, name), orderBy("createdAt","desc"), limit(200));
+        const q = query(collection(db, "users", user.uid, name), orderBy(field,"desc"), limit(count));
         unsubs.push(onSnapshot(q,
           snap => setter(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
           errHandler(name)
@@ -55,6 +59,8 @@ export function CoachProvider({ children }) {
     col("workouts", v => setRaw(p => ({ ...p, workouts: v })));
     col("meals",    v => setRaw(p => ({ ...p, meals: v })));
     col("trading",  v => setRaw(p => ({ ...p, trading: v })));
+    col("daily_checkins", v => setRaw(p => ({ ...p, dailyCheckins: v })), "date", 7);
+    col("goals", v => setRaw(p => ({ ...p, goals: v })), "createdAt", 50);
 
     // single-doc plan subscriptions
     const wpRef = doc(db, "users", user.uid, "workout_plan", "current");
@@ -78,6 +84,8 @@ export function CoachProvider({ children }) {
     workouts: sumWorkouts(raw.workouts),
     meals: sumMeals(raw.meals),
     trading: sumTrading(raw.trading),
+    dailyCheckins: raw.dailyCheckins.filter(row => { const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 6); return row.date >= localDayKey(cutoff) && row.date <= localDayKey(); }),
+    goals: raw.goals.filter(goal => !goal.archived).map(({ name, why, nextAction, targetDate, status, progress, target }) => ({ name, why: why || "", nextAction: nextAction || "", targetDate: targetDate || "", status: status || (Number(target) > 0 && Number(progress) >= Number(target) ? "achieved" : "active"), ...(target ? { progress, target } : {}) })),
     workoutPlan: plans.workout,
     mealPlan: plans.meal,
   }), [raw, plans]);

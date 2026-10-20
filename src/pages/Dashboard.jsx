@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { ArrowUpRight, ArrowRight, Plus, Dumbbell, Utensils, TrendingUp, Check, Sparkles, Target, CalendarDays, Activity, Loader2 } from 'lucide-react';
+import { ArrowUpRight, ArrowRight, Plus, Dumbbell, Utensils, TrendingUp, Check, Sparkles, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useCoach } from '../context/useCoach';
 import useDashboardData from '../hooks/useDashboardData';
-import { habitSummary, localDayKey } from '../lib/dashboard';
+import { habitSummary } from '../lib/dashboard';
 import { dailyQuotes } from '../data/quotes';
 import ScheduleTab from '../components/ScheduleTab';
 import HabitCard from '../components/HabitCard';
@@ -12,11 +12,14 @@ import AddHabitModal from '../components/AddHabitModal';
 import AddStatModal from '../components/AddStatModal';
 import GoalTracker from '../components/GoalTracker';
 import TodoList from '../components/TodoList';
+import DailyFocus, { PerformanceSnapshot } from '../components/DailyFocus';
+import useDailyFocus from '../hooks/useDailyFocus';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 export default function Dashboard() {
   const data = useDashboardData();
+  const focus = useDailyFocus();
   const { plans } = useCoach();
   const [modal, setModal] = useState(null);
   const [editing, setEditing] = useState(null);
@@ -41,25 +44,12 @@ export default function Dashboard() {
 
       {data.error && <div className="status-error" role="alert"><span>{data.error}</span><button className="button-secondary" onClick={data.reload}>Try again</button></div>}
 
-      <div className="dashboard-overview">
-        <section className="momentum-panel" aria-label="Daily habit progress">
-          <div className="momentum-copy">
-            <div className="inline-flex items-center gap-2 text-sm text-gold"><Activity size={16} /> Daily momentum</div>
-            <h2>{summary.total === 0 ? 'Build a day you feel good about.' : summary.percent === 100 ? 'You showed up. Every habit done.' : 'Keep showing up for yourself.'}</h2>
-            <p>{summary.total === 0 ? 'Start with one habit. Make room for what matters.' : `${summary.completed} of ${summary.total} habits complete. Your next small win is waiting.`}</p>
-            <a href="#daily-habits" className="momentum-link">{summary.total ? 'Continue your day' : 'Set your first habit'}<ArrowRight size={16} /></a>
-          </div>
-          <div className="progress-ring" style={{ '--progress': `${summary.percent}%` }} role="img" aria-label={`${summary.percent}% of daily habits complete`}>
-            <div><strong>{summary.percent}<span>%</span></strong><span>daily habits</span></div>
-          </div>
-        </section>
-        <section className="today-panel panel">
-          <div className="flex items-center justify-between text-sm text-gray-400"><span>Today at a glance</span><CalendarDays size={17} /></div>
-          <p className="today-date"><time dateTime={localDayKey(now)}>{now.toLocaleDateString(undefined, { weekday: 'long' })}</time></p>
-          <p className="text-sm text-gray-400">{now.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}</p>
-          <div className="today-totals"><div><Check size={16} /><strong>{summary.completed}<span>habits done</span></strong></div><div><Target size={16} /><strong>{data.stats.length}<span>stats tracked</span></strong></div></div>
-        </section>
+      <div className="dashboard-topline">
+        {quote && <blockquote className="quote-feature panel"><span>ONE THOUGHT FOR TODAY</span><p>“{quote}”</p><a href="#daily-focus" className="button-secondary">Give today a direction <ArrowRight size={14} /></a></blockquote>}
+        <ScheduleTab />
       </div>
+      <div id="daily-focus"><DailyFocus focus={focus} /></div>
+      <PerformanceSnapshot />
 
       <div className="journey-grid">
         <Link className="journey-card" to="/workout"><span className="journey-icon text-red-300"><Dumbbell size={21} /></span><div><span>Workout</span><strong>{workout?.focus || (plans?.workout ? 'Recovery & your program' : 'Build your training plan')}</strong></div><ArrowUpRight size={17} /></Link>
@@ -81,18 +71,19 @@ export default function Dashboard() {
               {data.pending && <p role="status" className="text-xs text-gold mt-3">Saving your progress…</p>}
             </section>
             <TodoList />
-            <GoalTracker />
+
           </div>
           <aside className="dashboard-secondary" aria-label="Schedule and progress">
-            <ScheduleTab />
+
             <section className="coach-invitation"><span className="journey-icon text-gold"><Sparkles size={21} /></span><h2>A little guidance goes a long way.</h2><p>Bring your training, nutrition, and daily progress into one conversation.</p><Link to="/coach" className="button-secondary">Talk to your coach <ArrowUpRight size={16} /></Link></section>
-            <section className="panel stats-panel"><div className="section-heading"><div><h2>Your stats</h2><p>The numbers that matter to you.</p></div><button className="icon-button" aria-label="Add stat" onClick={() => setModal('stat')}><Plus size={18} /></button></div>
-              {data.stats.length ? <div className="space-y-3">{data.stats.map(stat => <StatCard key={stat.id} stat={stat} pending={data.pending} onUpdate={data.updateStat} onDelete={data.removeStat} />)}</div> : <div className="empty-state compact"><p>Track weight, steps, or a personal milestone.</p><button className="button-secondary" onClick={() => setModal('stat')}><Plus size={16} /> Add a stat</button></div>}
+            <section className="panel stats-panel"><div className="section-heading"><div><h2>Your measurements</h2><p>Log real values, with units and a clear target.</p></div><button className="icon-button" aria-label="Add stat" onClick={() => setModal('stat')}><Plus size={18} /></button></div>
+              {data.stats.length ? <div className="space-y-3">{data.stats.map(stat => <StatCard key={stat.id} stat={stat} pending={data.pending} onUpdate={data.updateStat} onDelete={data.removeStat} />)}</div> : <div className="empty-state compact"><p>Track a measurement that supports your goals, such as body weight or daily steps.</p><button className="button-secondary" onClick={() => setModal('stat')}><Plus size={16} /> Add a stat</button></div>}
             </section>
-            {quote && <blockquote className="daily-quote"><span>ONE THOUGHT FOR TODAY</span><p>“{quote}”</p></blockquote>}
+
           </aside>
         </div>
       )}
+      <div className="dashboard-goals"><GoalTracker /></div>
       {modal === 'habit' && <AddHabitModal onClose={() => setModal(null)} onAdd={data.addHabit} />}
       {modal === 'edit' && editing && <AddHabitModal habitToEdit={editing} onClose={() => setModal(null)} onUpdate={data.editHabit} />}
       {modal === 'stat' && <AddStatModal onClose={() => setModal(null)} onAdd={data.addStat} />}

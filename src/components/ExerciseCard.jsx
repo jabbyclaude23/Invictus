@@ -1,28 +1,11 @@
-import React, { useState, useEffect } from "react";
+import ExercisePreview from './ExercisePreview';
+import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronDown, ChevronUp, RefreshCw, BarChart3, CheckCircle } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { MUSCLE_COLORS, MUSCLE_BG, getAlternatives, getSameMuscleAlts } from "../data/exercises";
 
-const IMG_CACHE = {};
-
-async function fetchWgerImage(name) {
-  if (IMG_CACHE[name] !== undefined) return IMG_CACHE[name];
-  try {
-    const r = await fetch(`https://wger.de/api/v2/exercise/?format=json&language=2&name=${encodeURIComponent(name)}`);
-    const d = await r.json();
-    const id = d?.results?.[0]?.id;
-    if (!id) { IMG_CACHE[name] = null; return null; }
-    const r2 = await fetch(`https://wger.de/api/v2/exerciseimage/?exercise=${id}&format=json`);
-    const d2 = await r2.json();
-    const url = d2?.results?.[0]?.image || null;
-    IMG_CACHE[name] = url;
-    return url;
-  } catch { IMG_CACHE[name] = null; return null; }
-}
-
 export default function ExerciseCard({ exercise, history = [], onLog, onSwap, onDetail }) {
-  const [img, setImg]           = useState(null);
   const [expanded, setExpanded] = useState(false);
   const [showChart, setShowChart]= useState(false);
   const [showSwap, setShowSwap] = useState(false);
@@ -37,7 +20,6 @@ export default function ExerciseCard({ exercise, history = [], onLog, onSwap, on
   const muscleColor = MUSCLE_COLORS[exercise.muscle] || "text-gray-400";
   const muscleBg    = MUSCLE_BG[exercise.muscle]    || "bg-gray-400/10 border-gray-400/20";
 
-  useEffect(() => { fetchWgerImage(exercise.name).then(setImg); }, [exercise.name]);
 
   const addSet = () => setSets(s => [...s, { reps: "", weight: "" }]);
   const updateSet = (i, field, val) => setSets(s => s.map((x, idx) => idx === i ? { ...x, [field]: val } : x));
@@ -61,15 +43,7 @@ export default function ExerciseCard({ exercise, history = [], onLog, onSwap, on
         className="flex items-center gap-3 p-4"
       >
         <button type="button" className="flex min-w-0 flex-1 items-center gap-3 text-left" aria-label={`Open ${exercise.name} details`} onClick={() => onDetail?.(exercise)}>
-        {/* Image or placeholder */}
-        <div className="w-14 h-14 rounded-xl overflow-hidden bg-[#1a1a1a] flex-shrink-0">
-          {img
-            ? <img src={img} alt={exercise.name} className="w-full h-full object-cover" />
-            : <div className={`w-full h-full flex items-center justify-center text-2xl ${muscleColor} bg-[#1a1a1a]`}>
-                {exercise.muscle === "chest" ? "🏋️" : exercise.muscle === "back" ? "💪" : exercise.muscle === "legs" ? "🦵" : exercise.muscle === "shoulders" ? "🤸" : exercise.muscle === "arms" ? "💪" : exercise.muscle === "core" ? "🎯" : "🏃"}
-              </div>
-          }
-        </div>
+        <ExercisePreview exercise={exercise} />
 
         {/* Info */}
         <div className="flex-1 min-w-0">
@@ -170,11 +144,7 @@ export default function ExerciseCard({ exercise, history = [], onLog, onSwap, on
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
           >
-            {img && (
-              <div className="mx-4 mt-3 rounded-xl overflow-hidden h-44 bg-[#1a1a1a]">
-                <img src={img} alt={exercise.name} className="w-full h-full object-cover" />
-              </div>
-            )}
+            <div className="mt-3"><ExercisePreview exercise={exercise} large /></div>
             {(exercise.desc || exercise.weight_suggestion) && (
               <div className="mt-3 mb-1 space-y-1.5">
                 {exercise.desc && (

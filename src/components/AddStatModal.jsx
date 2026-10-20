@@ -1,3 +1,4 @@
+import { MeasurementFields } from './StatCard';
 import { legacyHabitDayKey } from '../lib/dashboard';
 import useDialog from '../hooks/useDialog';
 import React, { useState } from "react";
@@ -9,6 +10,9 @@ import { iconMap } from "../data/iconMap.jsx";
 export default function AddStatModal({ onClose, onAdd }) {
   const [name, setName] = useState("");
   const [value, setValue] = useState(0);
+  const [unit,setUnit] = useState("");
+  const [target,setTarget] = useState("");
+  const [direction,setDirection] = useState("track");
   const [selectedIcon, setSelectedIcon] = useState(Object.keys(iconMap)[0]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -18,6 +22,7 @@ export default function AddStatModal({ onClose, onAdd }) {
     if (loading) return;
     if (!name.trim()) { setError("Please enter a name."); return; }
     if (String(value).trim() === "" || !Number.isFinite(Number(value))) { setError("Enter a valid value."); return; }
+    if(target !== "" && !Number.isFinite(Number(target))) { setError("Enter a valid target."); return; }
     setError("");
     setLoading(true);
     const user = auth.currentUser;
@@ -30,10 +35,11 @@ export default function AddStatModal({ onClose, onAdd }) {
         name: name.trim(),
         value: parseFloat(value),
         icon: selectedIcon,
+        unit:unit.trim(),target:target === "" ? null : Number(target),direction,
         createdAt: new Date(),
       });
       const key = legacyHabitDayKey();
-      batch.set(doc(db, "users", user.uid, "stats", docRef.id, "history", key), { date: key, value: Number(value) });
+      batch.set(doc(db, "users", user.uid, "stats", docRef.id, "history", key), { date: key, value: Number(value),unit:unit.trim() });
       await batch.commit();
 
       onAdd({
@@ -41,6 +47,7 @@ export default function AddStatModal({ onClose, onAdd }) {
         name: name.trim(),
         value: parseFloat(value),
         icon: selectedIcon,
+        unit:unit.trim(),target:target === "" ? null : Number(target),direction,
       });
 
       onClose();
@@ -67,7 +74,7 @@ export default function AddStatModal({ onClose, onAdd }) {
       >
         {/* Header */}
         <div className="flex justify-between items-center mb-4">
-          <h2 id="stat-dialog-title" className="text-xl font-semibold text-yellow-400">Add New Stat</h2>
+          <h2 id="stat-dialog-title" className="text-xl font-semibold text-yellow-400">Add a measurement</h2>
           <button
             aria-label="Close stat dialog" disabled={loading} onClick={onClose}
             className="text-gray-400 hover:text-yellow-400 text-lg font-bold"
@@ -79,14 +86,14 @@ export default function AddStatModal({ onClose, onAdd }) {
         {error && <p role="alert" className="status-error">{error}</p>}
           {/* Inputs */}
         <div className="space-y-4">
-          {/* Stat Name */}
+          {/* Measurement name */}
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Stat Name</label>
+            <label className="block text-sm text-gray-400 mb-1">Measurement name</label>
             <input
               aria-label="Stat name" value={name}
               onChange={(e) => setName(e.target.value)}
               className="w-full bg-[#222] border border-[#333] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-yellow-400"
-              placeholder="e.g. Weight, Profit, Steps"
+              placeholder="e.g. Body weight, daily steps"
             />
           </div>
 
@@ -102,6 +109,7 @@ export default function AddStatModal({ onClose, onAdd }) {
             />
           </div>
 
+          <MeasurementFields {...{unit,setUnit,target,setTarget,direction,setDirection}} disabled={loading} />
           {/* Icon Picker */}
           <div>
             <label className="block text-sm text-gray-400 mb-2">Icon</label>
@@ -138,7 +146,7 @@ export default function AddStatModal({ onClose, onAdd }) {
               disabled={loading}
               className="bg-yellow-400 text-black px-4 py-1.5 rounded-lg text-sm font-semibold disabled:opacity-50"
             >
-              {loading ? "Adding..." : "Add Stat"}
+              {loading ? "Adding..." : "Add measurement"}
             </button>
           </div>
         </div>

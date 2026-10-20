@@ -37,15 +37,21 @@ async page => {
   await page.waitForFunction(() => Object.entries(window.__fixture.dump()).some(([key, value]) => key.includes('/progress/') && value.progress === 1 && key.includes('fixture-')));
   passed.push('Habit modal traps focus and retains draft on failed save; retry succeeds');
 
-  await page.getByRole('button', { name: 'Increase Daily steps', exact: true }).click();
+  const steps = page.locator('.stat-tile').filter({has:page.getByRole('heading',{name:'Daily steps',exact:true})});
+  await steps.getByRole('button',{name:'Log value',exact:true}).click();
+  await steps.getByLabel('Value for Daily steps',{exact:true}).fill('8421');
+  await steps.getByRole('button',{name:'Save value',exact:true}).click();
   await waitRecord('/stats/steps', 'value', 8421);
   await waitRecord(`/stats/steps/history/${day}`, 'value', 8421);
+  await steps.getByRole('button',{name:'Log value',exact:true}).click();
+  await steps.getByLabel('Value for Daily steps',{exact:true}).fill('8422');
   await page.evaluate(() => { window.__fixture.failWrites = true; });
-  await page.getByRole('button', { name: 'Increase Daily steps', exact: true }).click();
+  await steps.getByRole('button',{name:'Save value',exact:true}).click();
   await page.getByText('That change could not be saved. Please try again.').waitFor();
   check((await page.evaluate(() => window.__fixture.dump()))['users/local-preview-user/stats/steps'].value === 8421, 'Failed stat save changed value');
   await page.evaluate(() => { window.__fixture.failWrites = false; });
-  passed.push('Stat saves atomically with history; failed save keeps previous value');
+  await steps.getByRole('button',{name:'Cancel',exact:true}).click();
+  passed.push('Measurement logs atomically with history; failed save keeps previous value');
 
   await page.getByRole('textbox', { name: 'New task', exact: true }).fill('Review tomorrow');
   await page.getByRole('textbox', { name: 'New task', exact: true }).press('Enter');
@@ -57,16 +63,19 @@ async page => {
   await page.getByRole('button', { name: 'Edit routine: Evening walk', exact: true }).click();
   await page.getByRole('textbox', { name: 'Routine name', exact: true }).fill('Evening walk outside');
   await page.getByRole('button', { name: 'Save routine', exact: true }).click();
-  await page.getByRole('textbox', { name: 'New goal name', exact: true }).fill('Mindful evenings');
-  await page.getByLabel('Goal target, greater than zero', { exact: true }).fill('5');
-  await page.getByRole('button', { name: 'Add goal', exact: true }).click();
-  await page.getByRole('button', { name: 'Increase Mindful evenings progress by one', exact: true }).click();
-  await page.waitForFunction(() => Object.values(window.__fixture.dump()).some(value => value.name === 'Mindful evenings' && value.progress === 1));
+  await page.getByRole('button',{name:'Add goal',exact:true}).click();
+  const goal = page.getByRole('dialog',{name:'What are you working toward?',exact:true});
+  await goal.getByLabel('What do you want to achieve?',{exact:true}).fill('Mindful evenings');
+  await goal.getByLabel(/Your next small action/).fill('Read for ten minutes after dinner');
+  await goal.getByRole('button',{name:'Add goal',exact:true}).click();
+  await goal.waitFor({state:'hidden'});
+  await page.getByRole('listitem').filter({hasText:'Mindful evenings'}).getByRole('button',{name:'Mark achieved',exact:true}).click();
+  await page.waitForFunction(() => Object.values(window.__fixture.dump()).some(value => value.name === 'Mindful evenings' && value.status === 'achieved'));
   await page.reload();
   await page.getByRole('checkbox', { name: 'Review tomorrow', exact: true }).waitFor();
   check(await page.getByRole('checkbox', { name: 'Review tomorrow', exact: true }).isChecked(), 'Task did not persist');
   await page.getByRole('button', { name: 'Edit routine: Evening walk outside', exact: true }).waitFor();
-  passed.push('Task, schedule edit, and goal progress persist across reload');
+  passed.push('Task, schedule edit, and narrative goal persist across reload');
 
   await page.goto(`${base}/trading`);
   await page.getByRole('button', { name: 'Log Trade', exact: true }).click();

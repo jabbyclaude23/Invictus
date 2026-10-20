@@ -33,11 +33,11 @@ export default function StatDetailModal({ stat, onClose }) {
         limit(14)
       );
       const snapshot = await getDocs(q);
-      const data = snapshot.docs.map((d) => d.data());
+      const data = snapshot.docs.map((d) => d.data()).filter(row => (row.unit || '') === (stat.unit || ''));
       setHistory(data.reverse());
     }
     fetchHistory().catch(() => setError("History could not be loaded. Close and reopen to try again.")).finally(() => setLoading(false));
-  }, [stat.id]);
+  }, [stat.id, stat.unit]);
 
   return (
     <motion.div
@@ -67,6 +67,7 @@ export default function StatDetailModal({ stat, onClose }) {
           {stat.name} Trend
         </h2>
 
+        {stat.unit && <p className="mb-4 text-xs text-gray-400">Entries recorded in {stat.unit}. Older entries in other units remain saved.</p>}
         {error ? <p role="alert" className="status-error">{error}</p> : loading ? <p role="status" className="text-sm text-gray-400 py-8">Loading history...</p> : history.length > 0 ? (
           <div className="h-60">
             <ResponsiveContainer width="100%" height="100%">
