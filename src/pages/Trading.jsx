@@ -3,9 +3,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Trash2, ChevronDown, ChevronUp, Bot, Loader2 } from "lucide-react";
 import { db, auth } from "../firebase";
 import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy } from "firebase/firestore";
-import { useCoach } from "../context/CoachContext";
+import { useCoach } from "../context/useCoach";
 import TradeModal from "../components/TradeModal";
 import TradeStats from "../components/TradeStats";
+import { formatPnl } from "../lib/dashboard";
 
 export default function Trading() {
   const { askCoach } = useCoach();
@@ -15,6 +16,8 @@ export default function Trading() {
   const [expanded, setExpanded]   = useState(null);
   const [aiLoading, setAiLoading] = useState(null);
   const [aiFeedback, setAiFeedback] = useState({});
+  const [error, setError] = useState("");
+  const [deleting, setDeleting] = useState(null);
 
   useEffect(() => {
     const unsub = auth.onAuthStateChanged(async u => {
@@ -30,6 +33,7 @@ export default function Trading() {
         }
       } catch (e) {
         console.error("Failed to load trades:", e);
+        setError("Your journal could not be loaded. Refresh to try again.");
       } finally {
         setLoading(false);
       }
@@ -39,7 +43,7 @@ export default function Trading() {
 
   const handleSave = async (tradeData) => {
     const u = auth.currentUser;
-    if (!u) { alert("Not signed in"); return; }
+    if (!u) throw new Error("Please sign in to save your trade.");
     try {
       const ref = await addDoc(collection(db, "users", u.uid, "trading"), {
         ...tradeData,
@@ -49,16 +53,25 @@ export default function Trading() {
       setTrades(prev => [{ id: ref.id, ...tradeData, createdAt: new Date() }, ...prev]);
     } catch (e) {
       console.error("Trade save error:", e?.message, e?.code);
-      alert(`Trade save failed: ${e?.code === "permission-denied" ? "Firestore rules expired — update in Firebase Console" : e?.message}`);
+      throw new Error("Your trade could not be saved. Please try again.");
     }
   };
 
   const handleDelete = async (id) => {
+    if (deleting || !window.confirm("Delete this trade? This cannot be undone.")) return;
     const u = auth.currentUser;
-    if (!u) return;
-    await deleteDoc(doc(db, "users", u.uid, "trading", id));
-    setTrades(prev => prev.filter(t => t.id !== id));
-    setExpanded(null);
+    if (!u) { setError("Please sign in to delete a trade."); return; }
+    setDeleting(id);
+    setError("");
+    try {
+      await deleteDoc(doc(db, "users", u.uid, "trading", id));
+      setTrades(prev => prev.filter(t => t.id !== id));
+      setExpanded(null);
+    } catch {
+      setError("This trade could not be deleted. Please try again.");
+    } finally {
+      setDeleting(null);
+    }
   };
 
   const getAiFeedback = async (trade) => {
@@ -69,9 +82,14 @@ Rules followed: ${trade.setup || "not specified"}
 Notes: ${trade.notes || "none"}
 
 Focus on: rule adherence, execution quality, and one improvement.`;
-    const reply = await askCoach({ messages: [{ role: "user", content: msg }], topic: "trading" });
-    setAiFeedback(prev => ({ ...prev, [trade.id]: reply }));
-    setAiLoading(null);
+    try {
+      const reply = await askCoach({ messages: [{ role: "user", content: msg }], topic: "trading" });
+      setAiFeedback(prev => ({ ...prev, [trade.id]: reply }));
+    } catch {
+      setError("Feedback is unavailable right now. Please try again.");
+    } finally {
+      setAiLoading(null);
+    }
   };
 
   if (loading) return (
@@ -81,32 +99,36 @@ Focus on: rule adherence, execution quality, and one improvement.`;
   );
 
   return (
-    <div className="min-h-screen bg-black pb-28 px-4 pt-6">
+    <div className="feature-page">
       <div className="glow-bg glow-trading" />
-      <div className="relative z-10 max-w-lg mx-auto">
+      <div className="relative z-10 feature-content">
 
         {/* Header */}
-        <div className="flex items-center justify-between mb-5">
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
           <div>
             <p className="text-xs text-blue-400 tracking-widest uppercase font-display">Trading</p>
-            <h1 className="text-2xl font-bold text-white">Trade Journal</h1>
+            <h1 className="page-heading">Trade Journal</h1>
+            <p className="page-description">Track your execution. Learn from every position.</p>
           </div>
           <button
             onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 bg-blue-500/15 text-blue-400 border border-blue-500/30 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-blue-500/25 transition"
+            className="button-primary"
           >
             <Plus size={15} /> Log Trade
           </button>
         </div>
+
+        {error && <p role="alert" className="mb-4 rounded-xl border border-red-400/20 bg-red-400/10 p-4 text-sm text-red-300">{error}</p>}
 
         {/* Stats */}
         <TradeStats trades={trades} />
 
         {/* Trade list */}
         {trades.length === 0 ? (
-          <div className="bg-[#111] border border-white/5 rounded-2xl p-8 text-center">
-            <p className="text-gray-600 text-sm">No trades logged yet.</p>
-            <p className="text-gray-700 text-xs mt-1">Log your first trade to start tracking performance.</p>
+          <div className="panel p-8 text-center">
+            <p className="text-white text-lg font-semibold">Every trade tells a story.</p>
+            <p className="text-gray-400 text-sm mt-2">Log your first trade to start tracking performance.</p>
+            <button onClick={() => setShowModal(true)} className="button-primary mt-5">Log your first trade</button>
           </div>
         ) : (
           <div className="space-y-2">
@@ -116,10 +138,13 @@ Focus on: rule adherence, execution quality, and one improvement.`;
               const isOpen = expanded === trade.id;
 
               return (
-                <div key={trade.id} className="bg-[#111] border border-white/5 rounded-2xl overflow-hidden">
+                <div key={trade.id} className="panel !p-0 overflow-hidden">
                   {/* Trade row */}
-                  <div
-                    className="flex items-center gap-3 px-4 py-3 cursor-pointer"
+                  <button
+                    type="button"
+                    aria-expanded={isOpen}
+                    aria-controls={`trade-${trade.id}`}
+                    className="w-full flex items-center gap-3 px-5 py-5 text-left hover:bg-white/[0.025] transition"
                     onClick={() => setExpanded(isOpen ? null : trade.id)}
                   >
                     {/* Side badge */}
@@ -132,7 +157,7 @@ Focus on: rule adherence, execution quality, and one improvement.`;
 
                     {/* Setup tag */}
                     {trade.setup && (
-                      <span className="text-xs text-gray-600 bg-[#1a1a1a] px-2 py-0.5 rounded-lg hidden sm:inline">{trade.setup}</span>
+                      <span className="text-xs text-gray-400 bg-[#1a1a1a] px-2 py-0.5 rounded-lg hidden sm:inline">{trade.setup}</span>
                     )}
 
                     {/* Spacer */}
@@ -140,12 +165,12 @@ Focus on: rule adherence, execution quality, and one improvement.`;
 
                     {/* PnL */}
                     <span className={`text-sm font-bold ${win ? "text-green-400" : flat ? "text-gray-400" : "text-red-400"}`}>
-                      {(trade.pnl || 0) >= 0 ? "+" : ""}${Math.abs(trade.pnl || 0).toLocaleString()}
+                      {formatPnl(trade.pnl)}
                     </span>
 
                     {/* Expand icon */}
-                    {isOpen ? <ChevronUp size={14} className="text-gray-600" /> : <ChevronDown size={14} className="text-gray-600" />}
-                  </div>
+                    {isOpen ? <ChevronUp size={14} className="text-gray-400" /> : <ChevronDown size={14} className="text-gray-400" />}
+                  </button>
 
                   {/* Expanded detail */}
                   <AnimatePresence>
@@ -156,13 +181,13 @@ Focus on: rule adherence, execution quality, and one improvement.`;
                         exit={{ height: 0, opacity: 0 }}
                         className="overflow-hidden"
                       >
-                        <div className="px-4 pb-4 border-t border-white/5 space-y-3">
+                        <div id={`trade-${trade.id}`} className="px-5 pb-5 border-t border-white/5 space-y-3">
                           {/* Entry / Exit */}
                           <div className="grid grid-cols-3 gap-2 mt-3">
                             {[["Entry", trade.entry],["Exit", trade.exit || "—"],["Contracts", trade.contracts || trade.size || "—"]].map(([l,v]) => (
                               <div key={l} className="bg-[#1a1a1a] rounded-xl p-2.5 text-center">
                                 <p className="text-sm font-bold text-white">{v}</p>
-                                <p className="text-xs text-gray-600">{l}</p>
+                                <p className="text-xs text-gray-400">{l}</p>
                               </div>
                             ))}
                           </div>
@@ -190,7 +215,7 @@ Focus on: rule adherence, execution quality, and one improvement.`;
                           <div className="flex gap-2">
                             <button
                               onClick={() => getAiFeedback(trade)}
-                              disabled={aiLoading === trade.id}
+                              disabled={aiLoading !== null}
                               className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-xs text-blue-400 border border-blue-500/20 hover:bg-blue-500/10 transition disabled:opacity-50"
                             >
                               {aiLoading === trade.id ? <Loader2 size={12} className="animate-spin" /> : <Bot size={12} />}
@@ -198,9 +223,11 @@ Focus on: rule adherence, execution quality, and one improvement.`;
                             </button>
                             <button
                               onClick={() => handleDelete(trade.id)}
+                              aria-label={`Delete ${trade.symbol} trade`}
+                              disabled={deleting !== null}
                               className="px-4 py-2 rounded-xl text-xs text-red-400 border border-red-500/20 hover:bg-red-500/10 transition"
                             >
-                              <Trash2 size={12} />
+                              {deleting === trade.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
                             </button>
                           </div>
                         </div>

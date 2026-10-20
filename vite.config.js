@@ -15,8 +15,8 @@ export default defineConfig({
         name: "Invictus Coach",
         short_name: "Invictus",
         description: "Your personal productivity and wellness tracker",
-        theme_color: "#facc15",
-        background_color: "#000000",
+        theme_color: "#0d1014",
+        background_color: "#0d1014",
         display: "standalone",
         start_url: "/",
         icons: [

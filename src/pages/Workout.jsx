@@ -2,12 +2,13 @@ import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Dumbbell, Play, RotateCcw, CheckCircle, ChevronDown, ChevronUp, RefreshCw, Send, Loader2 } from "lucide-react";
 import { db, auth } from "../firebase";
-import { doc, getDoc, setDoc, collection, getDocs, query, deleteDoc } from "firebase/firestore";
-import { useCoach } from "../context/CoachContext";
+import { doc, getDoc, setDoc, collection, getDocs, query, writeBatch } from "firebase/firestore";
+import { useCoach } from "../context/useCoach";
 import WorkoutOnboarding from "../components/WorkoutOnboarding";
 import ExerciseCard from "../components/ExerciseCard";
 import ExerciseDetailModal from "../components/ExerciseDetailModal";
-import { getExercise, getSameMuscleAlts, EXERCISES } from "../data/exercises";
+import { getExercise, EXERCISES } from "../data/exercises";
+import useDialog from "../hooks/useDialog";
 
 const WEEK_DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 const today    = () => new Date();
@@ -45,6 +46,18 @@ Return this exact JSON structure (no extra keys, no markdown):
 
 const MODIFY_PROMPT = `You are a certified strength and conditioning coach updating an existing workout plan based on user feedback. Make the requested changes while keeping the rest of the plan consistent. Return ONLY the complete updated plan in the exact same JSON structure. No explanation, no extra text — just JSON.`;
 
+function ConfirmReset({ onClose, onConfirm, pending, error }) {
+  const panel = useDialog(() => { if (!pending) onClose(); });
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-6 backdrop-blur-sm" onClick={event => { if (event.target === event.currentTarget && !pending) onClose(); }}>
+    <div ref={panel} role="dialog" aria-modal="true" aria-labelledby="reset-workout-title" aria-describedby="reset-workout-description" aria-busy={pending} className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#151a20] p-6">
+      <h2 id="reset-workout-title" className="mb-2 text-lg font-bold text-white">Start a New Plan?</h2>
+      <p id="reset-workout-description" className="mb-5 text-sm text-gray-400">This will end your current workout program and walk you through setup again. All your logged workout sessions will be preserved.</p>
+      {error && <p role="alert" className="mb-4 text-sm text-red-300">{error}</p>}
+      <div className="flex gap-3"><button type="button" onClick={onClose} disabled={pending} className="flex-1 rounded-xl border border-white/10 py-2.5 text-sm text-gray-300 disabled:opacity-50">Cancel</button><button type="button" onClick={onConfirm} disabled={pending} className="flex-1 rounded-xl bg-[#d4c17a] py-2.5 text-sm font-semibold text-black disabled:opacity-50">{pending ? "Resetting…" : "Start Fresh"}</button></div>
+    </div>
+  </div>;
+}
+
 function WorkoutChatBar({ onSend, loading }) {
   const [inputVal, setInputVal] = React.useState("");
   const inputRef = useRef(null);
@@ -62,12 +75,12 @@ function WorkoutChatBar({ onSend, loading }) {
 
   return (
     <div
-      className="fixed left-0 right-0 z-40 px-4"
-      style={{ bottom: "76px" }}
+      className="feature-chat fixed left-0 right-0 z-40 px-4"
     >
       <div className="max-w-lg mx-auto bg-[#111] border border-red-500/20 rounded-2xl flex items-center gap-2 px-3 py-2 shadow-xl">
         <input
           ref={inputRef}
+          aria-label="Workout plan change request"
           type="text"
           value={inputVal}
           onChange={e => setInputVal(e.target.value)}
@@ -78,6 +91,7 @@ function WorkoutChatBar({ onSend, loading }) {
         />
         <button
           onClick={handleSend}
+          aria-label="Update workout plan"
           disabled={loading || !inputVal.trim()}
           className="p-1.5 rounded-lg text-red-400 hover:text-red-300 disabled:opacity-40 transition flex-shrink-0"
         >
@@ -102,7 +116,6 @@ export default function Workout() {
   // ── Active workout state (preserved across back/resume) ─────────────────
   const [exercises,      setExercises]      = useState([]);
   const [loggedSets,     setLoggedSets]     = useState({});
-  const [swappedEx,      setSwappedEx]      = useState({});
   const [history,        setHistory]        = useState({});
   const [isWorkoutPaused,setIsWorkoutPaused]= useState(false);
   const [workoutStartTime,setWorkoutStartTime]=useState(null);
@@ -117,6 +130,11 @@ export default function Workout() {
   const [showNewPlanModal, setShowNewPlanModal] = useState(false);
   const [chatLoading,    setChatLoading]    = useState(false);
   const [chatMessage,    setChatMessage]    = useState(null);
+  const [pageError, setPageError] = useState("");
+  const [savingWorkout, setSavingWorkout] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const generationBusy = useRef(false);
+  const resetBusy = useRef(false);
 
   // ── Load profile ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -127,6 +145,7 @@ export default function Workout() {
         if (snap.exists()) setProfile(snap.data());
       } catch (e) {
         console.error("Failed to load workout profile:", e);
+        setPageError("Your workout profile couldn't be loaded. Refresh to try again.");
       } finally {
         setProfileLoading(false);
       }
@@ -139,8 +158,12 @@ export default function Workout() {
     const check = async () => {
       const u = auth.currentUser;
       if (!u) return;
-      const snap = await getDoc(doc(db, "users", u.uid, "workouts", todayStr()));
-      if (snap.exists()) setTodayLogged(true);
+      try {
+        const snap = await getDoc(doc(db, "users", u.uid, "workouts", todayStr()));
+        if (snap.exists()) setTodayLogged(true);
+      } catch {
+        setPageError("Today's workout status couldn't be loaded. Refresh to try again.");
+      }
     };
     check();
   }, []);
@@ -151,20 +174,24 @@ export default function Workout() {
     const load = async () => {
       const u = auth.currentUser;
       if (!u) return;
-      const h = {};
-      const snap = await getDocs(query(collection(db, "users", u.uid, "workouts")));
-      for (const ex of exercises) {
-        const sessions = [];
-        snap.forEach(d => {
-          const exLog = d.data().exercises?.[ex.name];
-          if (exLog) sessions.push({ date: d.id, weight: exLog[0]?.weight || 0, reps: exLog[0]?.reps || 0 });
-        });
-        h[ex.name] = sessions.slice(-8);
+      try {
+        const h = {};
+        const snap = await getDocs(query(collection(db, "users", u.uid, "workouts")));
+        for (const ex of exercises) {
+          const sessions = [];
+          snap.forEach(d => {
+            const exLog = d.data().exercises?.[ex.name];
+            if (exLog) sessions.push({ date: d.id, weight: exLog[0]?.weight || 0, reps: exLog[0]?.reps || 0 });
+          });
+          h[ex.name] = sessions.slice(-8);
+        }
+        setHistory(h);
+      } catch {
+        setPageError("Past sessions couldn't be loaded. You can still log this workout.");
       }
-      setHistory(h);
     };
     load();
-  }, [view, exercises]);
+  }, [view, exercises, history]);
 
   // ── Restore active workout from sessionStorage (survives tab navigation) ──
   useEffect(() => {
@@ -180,7 +207,7 @@ export default function Workout() {
           setElapsed(Math.floor((Date.now() - startTime) / 1000));
         }
       }
-    } catch {}
+    } catch { /* Session restoration is optional when storage is unavailable or corrupt. */ }
   }, []);
 
   // ── Persist active workout to sessionStorage whenever state changes ────────
@@ -192,7 +219,7 @@ export default function Workout() {
         exercises,
         loggedSets,
       }));
-    } catch {}
+    } catch { /* Continue the workout when browser storage is unavailable. */ }
   }, [workoutStartTime, exercises, loggedSets]);
 
   // ── Elapsed timer — runs whenever there is an active workout ─────────────
@@ -204,16 +231,25 @@ export default function Workout() {
 
   // ── Onboarding ──────────────────────────────────────────────────────────
   const handleOnboardingComplete = async (formData) => {
+    if (generationBusy.current) return;
+    generationBusy.current = true;
     setGenerating(true);
-    const u = auth.currentUser;
-    if (!u) return;
-    await setDoc(doc(db, "users", u.uid, "profile", "info"), { ...formData, createdAt: new Date() });
-    setProfile(formData);
-
-    const userPrompt = `User profile: ${JSON.stringify(formData)}. Generate a personalized workout program that strictly respects their equipment (${JSON.stringify(formData.equipment || [])}), location (${formData.location || "gym"}), workout duration (${formData.duration || "60 minutes"}), and any injuries/restrictions (${formData.injuries || "none"}).`;
-    const plan = await generatePlan(PLAN_PROMPT, userPrompt);
-    if (plan) await setDoc(doc(db, "users", u.uid, "workout_plan", "current"), { ...plan, createdAt: new Date() });
-    setGenerating(false);
+    setPageError("");
+    try {
+      const u = auth.currentUser;
+      if (!u) throw new Error("Please sign in again to create your program.");
+      await setDoc(doc(db, "users", u.uid, "profile", "info"), { ...formData, createdAt: new Date() });
+      setProfile(formData);
+      const userPrompt = `User profile: ${JSON.stringify(formData)}. Generate a personalized workout program that strictly respects their equipment (${JSON.stringify(formData.equipment || [])}), location (${formData.location || "gym"}), workout duration (${formData.duration || "60 minutes"}), and any injuries/restrictions (${formData.injuries || "none"}).`;
+      const plan = await generatePlan(PLAN_PROMPT, userPrompt);
+      if (!plan?.weekly_schedule?.length) throw new Error("No usable program was returned.");
+      await setDoc(doc(db, "users", u.uid, "workout_plan", "current"), { ...plan, createdAt: new Date() });
+    } catch {
+      setPageError("Your program couldn't be created. Please try again.");
+    } finally {
+      generationBusy.current = false;
+      setGenerating(false);
+    }
   };
 
   // ── Start / Resume workout ───────────────────────────────────────────────
@@ -249,7 +285,6 @@ export default function Workout() {
 
     setExercises(exList);
     setLoggedSets({});
-    setSwappedEx({});
     setHistory({});
     setView("active");
   };
@@ -265,33 +300,40 @@ export default function Workout() {
     setIsWorkoutPaused(false);
     setExercises([]);
     setLoggedSets({});
-    setSwappedEx({});
     setHistory({});
     setWorkoutStartTime(null);
     setElapsed(0);
-    try { sessionStorage.removeItem("invictus_active_workout"); } catch {}
+    try { sessionStorage.removeItem("invictus_active_workout"); } catch { /* Storage cleanup is optional. */ }
   };
 
   // ── Log handlers ────────────────────────────────────────────────────────
   const handleLog  = (name, sets) => setLoggedSets(prev => ({ ...prev, [name]: sets }));
   const handleSwap = (oldName, newEx) => {
-    setSwappedEx(prev => ({ ...prev, [oldName]: newEx }));
     setExercises(prev => prev.map(e => e.name === oldName ? { ...newEx, sets: e.sets, reps: e.reps } : e));
   };
 
   const finishWorkout = async () => {
+    if (savingWorkout) return;
     const u = auth.currentUser;
     if (!u) return;
-    await setDoc(doc(db, "users", u.uid, "workouts", todayStr()), {
-      date: todayStr(), day: todayDay(), exercises: loggedSets, createdAt: new Date(),
-    });
-    setWorkoutDone(true);
-    setTodayLogged(true);
-    setIsWorkoutPaused(false);
-    setWorkoutStartTime(null);
-    setElapsed(0);
-    setView("plan");
-    try { sessionStorage.removeItem("invictus_active_workout"); } catch {}
+    setSavingWorkout(true);
+    setPageError("");
+    try {
+      await setDoc(doc(db, "users", u.uid, "workouts", todayStr()), {
+        date: todayStr(), day: todayDay(), exercises: loggedSets, createdAt: new Date(),
+      });
+      setWorkoutDone(true);
+      setTodayLogged(true);
+      setIsWorkoutPaused(false);
+      setWorkoutStartTime(null);
+      setElapsed(0);
+      setView("plan");
+      try { sessionStorage.removeItem("invictus_active_workout"); } catch { /* The workout is already saved remotely. */ }
+    } catch {
+      setPageError("Your session could not be saved. Your logged sets are still here; please try again.");
+    } finally {
+      setSavingWorkout(false);
+    }
   };
 
   // ── Plan-view exercise swap ──────────────────────────────────────────────
@@ -301,25 +343,48 @@ export default function Workout() {
 
   // ── Regenerate full plan ─────────────────────────────────────────────────
   const regenerate = async () => {
-    if (!profile) return;
+    if (!profile || generationBusy.current) return;
+    generationBusy.current = true;
     setGenerating(true);
-    const u = auth.currentUser;
-    const variation = Math.floor(Math.random() * 1000);
-    const userPrompt = `User profile: ${JSON.stringify(profile)}. Generate a FRESH variation (seed: ${variation}) — use different exercise selections than before while still strictly matching their equipment, location, and restrictions.`;
-    const plan = await generatePlan(PLAN_PROMPT, userPrompt);
-    if (plan) await setDoc(doc(db, "users", u.uid, "workout_plan", "current"), { ...plan, createdAt: new Date() });
-    setPlanSwaps({}); // clear any pending swaps for old plan
-    setGenerating(false);
+    setPageError("");
+    try {
+      const u = auth.currentUser;
+      if (!u) throw new Error("Sign in required.");
+      const variation = Math.floor(Math.random() * 1000);
+      const userPrompt = `User profile: ${JSON.stringify(profile)}. Generate a FRESH variation (seed: ${variation}) — use different exercise selections than before while still strictly matching their equipment, location, and restrictions.`;
+      const plan = await generatePlan(PLAN_PROMPT, userPrompt);
+      if (!plan?.weekly_schedule?.length) throw new Error("No usable program was returned.");
+      await setDoc(doc(db, "users", u.uid, "workout_plan", "current"), { ...plan, createdAt: new Date() });
+      setPlanSwaps({});
+    } catch {
+      setPageError("Your program couldn't be generated. Please try again.");
+    } finally {
+      generationBusy.current = false;
+      setGenerating(false);
+    }
   };
 
   // ── New plan (reset) ─────────────────────────────────────────────────────
   const handleNewPlan = async () => {
-    setShowNewPlanModal(false);
-    const u = auth.currentUser;
-    if (!u) return;
-    await deleteDoc(doc(db, "users", u.uid, "workout_plan", "current"));
-    await deleteDoc(doc(db, "users", u.uid, "profile", "info"));
-    setProfile(null);
+    if (resetBusy.current) return;
+    resetBusy.current = true;
+    setResetting(true);
+    setPageError("");
+    try {
+      const u = auth.currentUser;
+      if (!u) throw new Error("Sign in required.");
+      const batch = writeBatch(db);
+      batch.delete(doc(db, "users", u.uid, "workout_plan", "current"));
+      batch.delete(doc(db, "users", u.uid, "profile", "info"));
+      await batch.commit();
+      setProfile(null);
+      setShowNewPlanModal(false);
+    } catch {
+      setPageError("Your program couldn't be reset. Please try again.");
+    } finally {
+      resetBusy.current = false;
+      setResetting(false);
+    }
   };
 
   // ── Chat-based plan modification ─────────────────────────────────────────
@@ -332,6 +397,7 @@ export default function Workout() {
     try {
       const contextPrompt = `Current workout plan: ${JSON.stringify(plan)}\nUser request: ${userMessage}`;
       const updated = await generatePlan(MODIFY_PROMPT, contextPrompt);
+      if (!updated?.weekly_schedule?.length) throw new Error("No usable program was returned.");
       if (updated) {
         await setDoc(doc(db, "users", u.uid, "workout_plan", "current"), { ...updated, createdAt: new Date() });
         setPlanSwaps({});
@@ -353,7 +419,10 @@ export default function Workout() {
     </div>
   );
 
-  if (!profile) return <WorkoutOnboarding onComplete={handleOnboardingComplete} loading={generating} />;
+  if (!profile) return <>
+    {pageError && <p role="alert" className="mx-auto mt-4 max-w-lg rounded-xl border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-300">{pageError}</p>}
+    <WorkoutOnboarding onComplete={handleOnboardingComplete} loading={generating} />
+  </>;
 
   if (generating) return (
     <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-4">
@@ -365,7 +434,7 @@ export default function Workout() {
 
   // ── Active workout view ──────────────────────────────────────────────────
   if (view === "active") return (
-    <div className="min-h-screen bg-black pb-28 px-4 pt-6">
+    <div className="feature-page">
       <div className="glow-bg glow-workout" />
 
       {/* Exercise detail modal — active view */}
@@ -380,12 +449,12 @@ export default function Workout() {
         )}
       </AnimatePresence>
 
-      <motion.div className="relative z-10 max-w-lg mx-auto" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      <motion.div className="relative z-10 feature-content" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
 
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
           <div>
             <p className="text-xs text-red-400 tracking-widest uppercase font-display">{todayDay()}</p>
-            <h1 className="text-2xl font-bold text-white">Today's Workout</h1>
+            <h1 className="page-heading">Today's Workout</h1>
             <p className="text-xs text-gray-500 mt-0.5 font-mono">
               {String(Math.floor(elapsed / 3600)).padStart(2,"0")}:{String(Math.floor((elapsed % 3600) / 60)).padStart(2,"0")}:{String(elapsed % 60).padStart(2,"0")}
             </p>
@@ -397,6 +466,8 @@ export default function Workout() {
             ← Back to Plan
           </button>
         </div>
+
+        {pageError && <p role="alert" className="mb-4 rounded-xl border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-300">{pageError}</p>}
 
         <div className="space-y-3">
           {exercises.map(ex => (
@@ -414,11 +485,12 @@ export default function Workout() {
         {Object.keys(loggedSets).length > 0 && (
           <motion.button
             onClick={finishWorkout}
+            disabled={savingWorkout}
             className="w-full mt-6 py-4 rounded-2xl bg-red-500 text-white font-bold text-lg hover:bg-red-400 transition flex items-center justify-center gap-2"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
           >
-            <CheckCircle size={20} /> Finish Workout
+            {savingWorkout ? <Loader2 size={20} className="animate-spin" /> : <CheckCircle size={20} />} {savingWorkout ? "Saving session..." : "Finish Workout"}
           </motion.button>
         )}
       </motion.div>
@@ -428,7 +500,7 @@ export default function Workout() {
   // ── Plan view ────────────────────────────────────────────────────────────
   const plan = plans.workout;
   return (
-    <div className="min-h-[100dvh] bg-black pb-28 px-4 pt-6">
+    <div className="feature-page">
       <div className="glow-bg glow-workout" />
 
       {/* Exercise detail modal */}
@@ -445,13 +517,14 @@ export default function Workout() {
         )}
       </AnimatePresence>
 
-      <motion.div className="relative z-10 max-w-lg mx-auto" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+      <motion.div className="relative z-10 feature-content" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
 
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
           <div>
             <p className="text-xs text-red-400 tracking-widest uppercase font-display">Workout</p>
-            <h1 className="text-2xl font-bold text-white">{plan?.program_name || "Your Program"}</h1>
+            <h1 className="page-heading">{plan?.program_name || "Your Program"}</h1>
+            <p className="page-description">Train with intention. Build strength, one session at a time.</p>
             {plan && <p className="text-sm text-gray-500 mt-0.5">{plan.timeline_weeks}wk · {plan.days_per_week}x/week</p>}
           </div>
           <button
@@ -462,10 +535,13 @@ export default function Workout() {
           </button>
         </div>
 
+        {pageError && <p role="alert" className="mb-4 rounded-xl border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-300">{pageError}</p>}
+
         {!plan ? (
-          <div className="bg-[#111] border border-white/5 rounded-2xl p-6 text-center">
-            <p className="text-gray-500 text-sm">No plan yet.</p>
-            <button onClick={regenerate} className="mt-3 text-sm text-red-400 hover:text-red-300">Generate Plan</button>
+          <div className="panel p-6 text-center">
+            <p className="text-white text-lg font-semibold">Your next chapter starts here.</p>
+            <p className="text-gray-400 text-sm mt-2">Create a program built around your goals, equipment, and schedule.</p>
+            <button onClick={regenerate} className="button-primary mt-4">Generate Plan</button>
           </div>
         ) : (
           <>
@@ -497,7 +573,7 @@ export default function Workout() {
                       {isWorkoutPaused && (
                         <button
                           onClick={discardWorkout}
-                          className="text-xs text-gray-600 hover:text-red-400 transition"
+                          className="text-xs text-gray-400 hover:text-red-400 transition"
                         >
                           × Discard
                         </button>
@@ -509,13 +585,14 @@ export default function Workout() {
             )}
 
             {/* Weekly schedule */}
-            <div className="space-y-2">
+            <div className="weekly-grid gap-3 items-start">
               {plan.weekly_schedule?.map((day, i) => (
-                <div key={i} className="bg-[#111] border border-white/5 rounded-2xl overflow-hidden">
+                <div key={i} className="panel overflow-hidden">
 
                   {/* Day header */}
                   <button
                     className="w-full flex items-center justify-between px-4 py-3"
+                    aria-expanded={expandedDay === i}
                     onClick={() => setExpandedDay(expandedDay === i ? null : i)}
                   >
                     <div className="text-left">
@@ -528,7 +605,7 @@ export default function Workout() {
                       {Object.keys(planSwaps).some(k => k.startsWith(`${i}::`)) && (
                         <span className="text-xs text-blue-400">edited</span>
                       )}
-                      <span className="text-xs text-gray-600">{day.exercises?.length} exercises</span>
+                      <span className="text-xs text-gray-400">{day.exercises?.length} exercises</span>
                       {expandedDay === i
                         ? <ChevronUp size={14} className="text-gray-500" />
                         : <ChevronDown size={14} className="text-gray-500" />}
@@ -568,7 +645,7 @@ export default function Workout() {
                                       <span className="text-xs text-blue-500 flex-shrink-0">↔</span>
                                     )}
                                   </div>
-                                  <span className="text-xs text-gray-600 flex-shrink-0 ml-2">
+                                  <span className="text-xs text-gray-400 flex-shrink-0 ml-2">
                                     {ex.sets}×{ex.reps}
                                   </span>
                                 </button>
@@ -576,7 +653,7 @@ export default function Workout() {
                                 {/* Per-exercise swap button */}
                                 <button
                                   onClick={() => setDetailExercise({ ...activeEx, muscle, dayIdx: i })}
-                                  className="p-1.5 rounded-lg text-gray-700 hover:text-blue-400 opacity-0 group-hover:opacity-100 transition flex-shrink-0"
+                                  className="p-1.5 rounded-lg text-gray-500 hover:text-blue-400 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 transition flex-shrink-0"
                                   title="Swap exercise"
                                 >
                                   <RefreshCw size={13} />
@@ -594,7 +671,7 @@ export default function Workout() {
 
             {/* Rest day */}
             {!plan.weekly_schedule?.some(d => d.day === todayDay()) && (
-              <div className="mt-4 bg-[#111] border border-white/5 rounded-2xl p-4 text-center">
+              <div className="mt-4 panel p-4 text-center">
                 <p className="text-gray-500 text-sm">Rest day today. Recovery is part of the program.</p>
               </div>
             )}
@@ -635,42 +712,7 @@ export default function Workout() {
       </motion.div>
 
       {/* New Plan confirmation modal */}
-      <AnimatePresence>
-        {showNewPlanModal && (
-          <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center px-6 bg-black/70 backdrop-blur-sm"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            <motion.div
-              className="bg-[#111] border border-white/10 rounded-2xl p-6 w-full max-w-sm"
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-            >
-              <h2 className="text-lg font-bold text-white mb-2">Start a New Plan?</h2>
-              <p className="text-sm text-gray-400 mb-5">
-                This will end your current workout program and walk you through setup again. All your logged workout sessions will be preserved.
-              </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowNewPlanModal(false)}
-                  className="flex-1 py-2.5 rounded-xl text-sm text-gray-400 border border-white/10 hover:border-white/20 transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleNewPlan}
-                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-red-500 text-white hover:bg-red-400 transition"
-                >
-                  Start Fresh
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {showNewPlanModal && <ConfirmReset onClose={() => setShowNewPlanModal(false)} onConfirm={handleNewPlan} pending={resetting} error={pageError} />}
 
       {/* Chat bar — plan view only */}
       {plan && <WorkoutChatBar onSend={handleChatModify} loading={chatLoading} />}

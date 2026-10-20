@@ -4,6 +4,7 @@ import { X, TrendingUp, ChevronDown, ChevronUp } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { db, auth } from "../firebase";
 import { collection, getDocs } from "firebase/firestore";
+import useDialog from "../hooks/useDialog";
 import { EXERCISES, MUSCLE_COLORS, MUSCLE_BG, getSameMuscleAlts } from "../data/exercises";
 
 // ── Data fetcher: ExerciseDB (search → detail) → wger fallback ──────────────
@@ -50,7 +51,7 @@ async function fetchExerciseInfo(name) {
         return INFO_CACHE[name];
       }
     }
-  } catch {}
+  } catch { /* Try the fallback exercise source below. */ }
 
   // 2. Fall back to wger (static image + HTML description)
   try {
@@ -77,6 +78,8 @@ export default function ExerciseDetailModal({ exercise, onClose, onSwap, onLog }
   const [infoLoading,setInfoLoading]= useState(true);
   const [history,    setHistory]    = useState([]);
   const [histLoaded, setHistLoaded] = useState(false);
+  const [historyError, setHistoryError] = useState("");
+  const dialogRef = useDialog(onClose);
   const [showSwap,   setShowSwap]   = useState(false);
   const [swapFilter, setSwapFilter] = useState("");
 
@@ -97,30 +100,41 @@ export default function ExerciseDetailModal({ exercise, onClose, onSwap, onLog }
 
   useEffect(() => {
     if (!exercise?.name) return;
+    let active = true;
     setInfo(null); setInfoLoading(true);
-    setHistory([]); setHistLoaded(false);
+    setHistory([]); setHistLoaded(false); setHistoryError("");
     setShowSwap(false); setSwapFilter("");
     setSets(Array.from({ length: exercise?.sets || 1 }, () => ({ reps: "", weight: "" })));
     setLogDone(false); setLoggedSets([]);
 
-    fetchExerciseInfo(exercise.name).then(d => { setInfo(d); setInfoLoading(false); });
+    fetchExerciseInfo(exercise.name)
+      .then(data => { if (active) setInfo(data); })
+      .catch(() => { if (active) setInfo(null); })
+      .finally(() => { if (active) setInfoLoading(false); });
 
     const u = auth.currentUser;
-    if (!u) { setHistLoaded(true); return; }
-    getDocs(collection(db, "users", u.uid, "workouts")).then(snap => {
-      const sessions = [];
-      snap.forEach(d => {
-        const exLog = d.data().exercises?.[exercise.name];
-        if (exLog) sessions.push({
-          date:   d.id.slice(5),
-          weight: parseFloat(exLog[0]?.weight) || 0,
-          reps:   parseInt(exLog[0]?.reps)     || 0,
-        });
-      });
-      setHistory(sessions.slice(-10));
+    if (!u) {
       setHistLoaded(true);
-    });
-  }, [exercise?.name]);
+    } else {
+      getDocs(collection(db, "users", u.uid, "workouts"))
+        .then(snapshot => {
+          if (!active) return;
+          const sessions = [];
+          snapshot.forEach(d => {
+            const exLog = d.data().exercises?.[exercise.name];
+            if (exLog) sessions.push({
+              date: d.id.slice(5),
+              weight: parseFloat(exLog[0]?.weight) || 0,
+              reps: parseInt(exLog[0]?.reps) || 0,
+            });
+          });
+          setHistory(sessions.slice(-10));
+        })
+        .catch(() => { if (active) setHistoryError("Your exercise history could not be loaded. Close and reopen to try again."); })
+        .finally(() => { if (active) setHistLoaded(true); });
+    }
+    return () => { active = false; };
+  }, [exercise?.name, exercise?.sets]);
 
   const addSet    = () => setSets(s => [...s, { reps: "", weight: "" }]);
   const removeSet = i => setSets(s => s.filter((_, idx) => idx !== i));
@@ -142,7 +156,12 @@ export default function ExerciseDetailModal({ exercise, onClose, onSwap, onLog }
   return (
     <AnimatePresence>
       <motion.div
-        className="fixed inset-0 z-50 bg-black flex flex-col"
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="exercise-detail-title"
+        className="fixed inset-0 z-50 bg-black flex flex-col min-h-0 overflow-hidden"
+        style={{ height: "100dvh", maxHeight: "100dvh" }}
         initial={{ x: "100%" }}
         animate={{ x: 0 }}
         exit={{ x: "100%" }}
@@ -156,9 +175,11 @@ export default function ExerciseDetailModal({ exercise, onClose, onSwap, onLog }
         }}
       >
         {/* Sticky header */}
-        <div className="sticky top-0 bg-black/95 backdrop-blur z-10 flex items-center justify-between px-4 pt-safe pt-5 pb-3 border-b border-white/5">
+        <div className="shrink-0 bg-black/95 backdrop-blur z-10 flex items-center justify-between px-4 pb-3 border-b border-white/5"
+          style={{ paddingTop: "calc(20px + env(safe-area-inset-top))" }}>
           <button
             onClick={onClose}
+            aria-label="Close exercise details"
             className="p-2 rounded-xl bg-[#111] border border-white/10 text-gray-400 hover:text-white transition"
           >
             <X size={18} />
@@ -167,7 +188,7 @@ export default function ExerciseDetailModal({ exercise, onClose, onSwap, onLog }
             {muscle}
           </span>
         </div>
-        <div className="overflow-y-auto flex-1">
+        <div className="min-h-0 overflow-y-auto overscroll-contain flex-1">
 
         <div className="px-4 pb-32 max-w-lg mx-auto w-full space-y-4 pt-4">
 
@@ -201,7 +222,7 @@ export default function ExerciseDetailModal({ exercise, onClose, onSwap, onLog }
 
           {/* Name + plan details */}
           <div>
-            <h1 className="text-2xl font-bold text-white">{exercise.name}</h1>
+            <h1 id="exercise-detail-title" className="text-2xl font-bold text-white">{exercise.name}</h1>
             <div className="flex items-center gap-3 mt-1.5 text-sm text-gray-500 flex-wrap">
               {exercise.sets && <span>{exercise.sets} sets</span>}
               {exercise.reps && <><span>·</span><span>{exercise.reps} reps</span></>}
@@ -258,6 +279,7 @@ export default function ExerciseDetailModal({ exercise, onClose, onSwap, onLog }
                         <input
                           type="number"
                           inputMode="numeric"
+                          aria-label={`Repetitions for set ${i + 1}`}
                           placeholder="Reps"
                           value={s.reps}
                           onChange={e => updateSet(i, "reps", e.target.value)}
@@ -266,13 +288,14 @@ export default function ExerciseDetailModal({ exercise, onClose, onSwap, onLog }
                         <input
                           type="number"
                           inputMode="decimal"
+                          aria-label={`Weight in kilograms for set ${i + 1}`}
                           placeholder="kg"
                           value={s.weight}
                           onChange={e => updateSet(i, "weight", e.target.value)}
                           className="w-20 flex-shrink-0 bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500/50"
                         />
                         {sets.length > 1 && (
-                          <button onClick={() => removeSet(i)} className="text-gray-600 hover:text-red-400 text-xs flex-shrink-0 w-5">✕</button>
+                          <button aria-label={`Remove set ${i + 1}`} onClick={() => removeSet(i)} className="text-gray-600 hover:text-red-400 text-xs flex-shrink-0 w-5">✕</button>
                         )}
                       </div>
                     ))}
@@ -307,6 +330,8 @@ export default function ExerciseDetailModal({ exercise, onClose, onSwap, onLog }
               <div className="h-8 flex items-center">
                 <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
               </div>
+            ) : historyError ? (
+              <p role="alert" className="text-sm text-red-300">{historyError}</p>
             ) : history.length > 0 ? (
               <div className="h-40">
                 <ResponsiveContainer width="100%" height="100%">
@@ -332,6 +357,8 @@ export default function ExerciseDetailModal({ exercise, onClose, onSwap, onLog }
           {onSwap && (
             <div className="bg-[#111] border border-white/5 rounded-2xl p-4">
               <button
+                aria-expanded={showSwap}
+                aria-controls="exercise-alternatives"
                 onClick={() => setShowSwap(s => !s)}
                 className="flex items-center justify-between w-full"
               >
@@ -346,6 +373,7 @@ export default function ExerciseDetailModal({ exercise, onClose, onSwap, onLog }
               <AnimatePresence>
                 {showSwap && (
                   <motion.div
+                    id="exercise-alternatives"
                     initial={{ height: 0, opacity: 0 }}
                     animate={{ height: "auto", opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
@@ -354,6 +382,7 @@ export default function ExerciseDetailModal({ exercise, onClose, onSwap, onLog }
                     {/* Filter input */}
                     <input
                       type="text"
+                      aria-label="Filter alternative exercises"
                       value={swapFilter}
                       onChange={e => setSwapFilter(e.target.value)}
                       placeholder="Filter exercises…"

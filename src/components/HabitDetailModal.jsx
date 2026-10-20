@@ -1,3 +1,4 @@
+import useDialog from '../hooks/useDialog';
 import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
@@ -22,6 +23,9 @@ import { X } from "lucide-react";
 
 export default function HabitDetailModal({ habit, onClose }) {
   const [history, setHistory] = useState([]);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const dialogRef = useDialog(onClose);
 
   useEffect(() => {
     async function fetchHistory() {
@@ -36,7 +40,7 @@ export default function HabitDetailModal({ habit, onClose }) {
       setHistory(ordered);
     }
 
-    fetchHistory();
+    fetchHistory().catch(() => setError("History could not be loaded. Close and reopen to try again.")).finally(() => setLoading(false));
   }, [habit.id]);
 
   const isNumeric = habit.target && habit.target > 1;
@@ -50,6 +54,7 @@ export default function HabitDetailModal({ habit, onClose }) {
       onClick={onClose}
     >
       <motion.div
+        ref={dialogRef} role="dialog" aria-modal="true" aria-label="Progress history"
         onClick={(e) => e.stopPropagation()}
         className="bg-[#111] border border-[#222] rounded-2xl p-6 w-[90%] max-w-md text-white shadow-xl shadow-black/50 relative"
         initial={{ scale: 0.9, opacity: 0 }}
@@ -59,7 +64,7 @@ export default function HabitDetailModal({ habit, onClose }) {
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-3 right-3 p-1 text-gray-400 hover:text-yellow-400 transition"
+          aria-label="Close history" className="absolute top-3 right-3 p-1 text-gray-400 hover:text-yellow-400 transition"
         >
           <X size={18} strokeWidth={2} />
         </button>
@@ -71,7 +76,7 @@ export default function HabitDetailModal({ habit, onClose }) {
           Last {history.length} days of tracking
         </p>
 
-        {history.length > 0 ? (
+        {error ? <p role="alert" className="status-error">{error}</p> : loading ? <p role="status" className="text-sm text-gray-400 py-8">Loading history...</p> : history.length > 0 ? (
           <div className="h-60">
             {isNumeric ? (
               // 🔹 Bar Chart for numeric habits
@@ -97,7 +102,7 @@ export default function HabitDetailModal({ habit, onClose }) {
                   />
                   <Bar
                     dataKey="progress"
-                    fill="#facc15"
+                    fill="#d4c17a"
                     radius={[6, 6, 0, 0]}
                   />
                 </BarChart>

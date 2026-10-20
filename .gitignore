@@ -25,3 +25,8 @@ dist-ssr
 .env
 
 .vercel
+
+# Local browser runs and lint audit reports
+.playwright-cli/
+baseline-eslint.json
+current-eslint.json
