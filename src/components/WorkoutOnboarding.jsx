@@ -1,10 +1,11 @@
+import { workoutProfileFromLbs } from '../lib/units';
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronRight, ChevronLeft, Dumbbell } from "lucide-react";
 
 const STEPS = [
   { key:"age",         label:"How old are you?",                      type:"number",        placeholder:"e.g. 25",  unit:"years" },
-  { key:"weight",      label:"What's your current weight?",            type:"number",        placeholder:"e.g. 80",  unit:"kg" },
+  { key:"weight",      label:"What's your current weight?",            type:"number",        placeholder:"e.g. 180", unit:"lbs" },
   { key:"height",      label:"What's your height?",                   type:"number",        placeholder:"e.g. 178", unit:"cm" },
   { key:"sex",         label:"Biological sex",                        type:"select",        options:["Male","Female"] },
   { key:"experience",  label:"Training experience level",             type:"select",        options:["Beginner (< 1 year)","Intermediate (1–3 years)","Advanced (3+ years)"] },
@@ -29,11 +30,11 @@ export default function WorkoutOnboarding({ onComplete, loading }) {
 
   const scalarVal = form[current.key] || "";
   const multiVal  = Array.isArray(form[current.key]) ? form[current.key] : [];
-  const canNext   = isOptional ? true : (isMulti ? multiVal.length > 0 : !!scalarVal);
+  const canNext   = isOptional ? true : isMulti ? multiVal.length > 0 : current.type === "number" ? Number.isFinite(Number(scalarVal)) && Number(scalarVal) > 0 : !!scalarVal;
 
   const next = () => {
     if (!canNext) return;
-    if (isLast) { onComplete(form); return; }
+    if (isLast) { onComplete(workoutProfileFromLbs(form)); return; }
     setStep(s => s + 1);
   };
 
@@ -130,7 +131,7 @@ export default function WorkoutOnboarding({ onComplete, loading }) {
             {current.type === "number" && (
               <div className="relative mt-4">
                 <input
-                  type="number"
+                  type="number" min="0.1" step={current.key === "age" ? "1" : "any"} aria-label={`${current.label} ${current.unit || ""}`}
                   value={scalarVal}
                   onChange={e => setForm(f => ({ ...f, [current.key]: e.target.value }))}
                   onKeyDown={handleKey}

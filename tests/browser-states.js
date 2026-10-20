@@ -38,7 +38,7 @@ async page => {
   await page.getByRole('navigation', { name: 'Mobile navigation' }).getByRole('link', { name: 'Dashboard', exact: true }).click();
   await page.getByText('Your dashboard could not be loaded. Check your connection and try again.').waitFor();
   await page.evaluate(() => { window.__fixture.failReads = false; });
-  await page.getByRole('button', { name: 'Try again', exact: true }).click();
+  await page.getByText('Your dashboard could not be loaded. Check your connection and try again.').locator('..').getByRole('button', { name: 'Try again', exact: true }).click();
   await page.getByRole('heading', { name: 'Your routine starts here' }).waitFor();
   checks.push('Dashboard failed read is visible and retry recovers');
   await page.goto(base);

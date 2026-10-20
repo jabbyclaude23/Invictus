@@ -11,7 +11,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "start": "node server.js",
-    "test": "node --test src/lib/dashboard.test.js src/lib/coachResponse.test.js",
+    "test": "node --test src/lib/*.test.js tests/exerciseProxy.test.js",
     "test:fixtures": "node tests/fixtures/verify.mjs",
     "preview:fixtures": "vite --config tests/vite.config.js",
     "lint": "eslint src"

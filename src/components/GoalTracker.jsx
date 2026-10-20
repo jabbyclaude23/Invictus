@@ -1,82 +1,112 @@
 import { useEffect, useRef, useState } from "react";
-import { Plus, Minus, Trash2, Edit2, Check, ChevronDown, X } from "lucide-react";
+import { Plus, Pencil, Archive, Trash2, Check, RotateCcw, X, Flag } from "lucide-react";
 import { collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, orderBy } from "firebase/firestore";
 import { db, auth } from "../firebase";
+import useDialog from "../hooks/useDialog";
 
-const iconButton = "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/[0.07] text-gray-400 hover:bg-white/5 hover:text-[#d4c17a] disabled:opacity-30";
-const field = "min-h-11 min-w-0 rounded-xl border border-white/10 bg-[#101419] px-3 text-sm text-white";
+const field = "mt-2 w-full rounded-xl border border-white/10 bg-[#101419] px-3 py-3 text-sm text-white";
+const titleOf = goal => goal.name || goal.title || "Untitled goal";
+const statusOf = goal => goal.status || (Number(goal.target) > 0 && Number(goal.progress) >= Number(goal.target) ? "achieved" : "active");
+
+function GoalForm({ goal, onClose, onSave, pending, error }) {
+  const [name, setName] = useState(goal ? titleOf(goal) : "");
+  const [why, setWhy] = useState(goal?.why || "");
+  const [nextAction, setNextAction] = useState(goal?.nextAction || "");
+  const [targetDate, setTargetDate] = useState(goal?.targetDate || "");
+  const dialog = useDialog(pending ? null : onClose);
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-5 py-6 backdrop-blur-sm" onClick={event => { if (event.target === event.currentTarget && !pending) onClose(); }}>
+    <section ref={dialog} role="dialog" aria-modal="true" aria-labelledby="goal-form-title" aria-busy={pending} className="panel w-full max-w-lg overflow-y-auto">
+      <div className="section-heading"><h2 id="goal-form-title">{goal ? "Edit your goal" : "What are you working toward?"}</h2><button type="button" disabled={pending} onClick={onClose} aria-label="Close goal form" className="icon-button"><X size={18} /></button></div>
+      <form onSubmit={event => { event.preventDefault(); if (name.trim()) onSave({ name: name.trim(), why: why.trim(), nextAction: nextAction.trim(), targetDate }); }} className="space-y-4">
+        <label className="block text-xs text-gray-300">What do you want to achieve?<textarea required maxLength={600} rows={2} value={name} onChange={event => setName(event.target.value)} disabled={pending} className={field} placeholder="Write a goal in your own words" /></label>
+        <label className="block text-xs text-gray-300">Why it matters <span className="text-gray-500">(optional)</span><textarea maxLength={1200} rows={2} value={why} onChange={event => setWhy(event.target.value)} disabled={pending} className={field} placeholder="What would this change for you?" /></label>
+        <label className="block text-xs text-gray-300">Your next small action <span className="text-gray-500">(optional)</span><input maxLength={600} value={nextAction} onChange={event => setNextAction(event.target.value)} disabled={pending} className={field} placeholder="One step you can take from here" /></label>
+        <label className="block text-xs text-gray-300">Target date <span className="text-gray-500">(optional)</span><input type="date" value={targetDate} onChange={event => setTargetDate(event.target.value)} disabled={pending} className={field} /></label>
+        {error && <p role="alert" className="text-sm text-red-300">{error}</p>}
+        <div className="flex flex-wrap justify-end gap-3 pt-2"><button type="button" className="button-secondary" disabled={pending} onClick={onClose}>Cancel</button><button type="submit" className="button-primary" disabled={pending || !name.trim()}>{pending ? "Saving…" : goal ? "Save goal" : "Add goal"}</button></div>
+      </form>
+    </section>
+  </div>;
+}
+
 export default function GoalTracker() {
+  const [uid, setUid] = useState(null);
   const [goals, setGoals] = useState([]);
-  const [newGoal, setNewGoal] = useState("");
-  const [target, setTarget] = useState("");
-  const [editingId, setEditingId] = useState(null);
-  const [tempProgress, setTempProgress] = useState("");
-  const [expanded, setExpanded] = useState(true);
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+  const [attempt, setAttempt] = useState(0);
+  const [showArchived, setShowArchived] = useState(false);
+  const [editing, setEditing] = useState(null);
   const busy = useRef(false);
+  useEffect(() => auth.onAuthStateChanged(user => {
+    setUid(user?.uid || null); setGoals([]); setEditing(null); setError(""); setLoading(Boolean(user));
+  }), []);
   useEffect(() => {
+    if (!uid) return;
     let active = true;
-    async function load() {
-      try {
-        if (!auth.currentUser) throw new Error();
-        const snapshot = await getDocs(query(collection(db, "users", auth.currentUser.uid, "goals"), orderBy("createdAt")));
-        if (active) setGoals(snapshot.docs.map(item => ({ ...item.data(), id: item.id })));
-      } catch { if (active) setError("Couldn't load your goals. Refresh to try again."); }
-      finally { if (active) setLoading(false); }
-    }
-    load();
+    setLoading(true); setError("");
+    getDocs(query(collection(db, "users", uid, "goals"), orderBy("createdAt")))
+      .then(snapshot => { if (active) setGoals(snapshot.docs.map(item => ({ ...item.data(), id: item.id }))); })
+      .catch(() => { if (active) setError("Your goals couldn't be loaded. Please try again."); })
+      .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, []);
-  async function mutate(action) {
-    if (busy.current || loading) return;
+  }, [uid, attempt]);
+
+  async function mutate(operation) {
+    if (busy.current || loading || !uid) return false;
+    if (auth.currentUser?.uid !== uid) { setError("Please sign in again before changing your goals."); return false; }
     busy.current = true; setPending(true); setError("");
-    try { if (!auth.currentUser) throw new Error(); await action(auth.currentUser.uid); }
-    catch { setError("Couldn't save your goal. Please try again."); }
-    finally { busy.current = false; setPending(false); }
+    try {
+      await operation(uid);
+      return true;
+    } catch {
+      if (auth.currentUser?.uid === uid) setError("Your goal couldn't be saved. Please try again.");
+      return false;
+    } finally { busy.current = false; setPending(false); }
   }
-  function add(event) {
-    event.preventDefault();
-    const number = Number(target);
-    if (!newGoal.trim()) { setError("Give your goal a name."); return; }
-    if (!Number.isFinite(number) || number <= 0) { setError("Choose a target greater than zero."); return; }
-    mutate(async uid => {
-      const item = { name: newGoal.trim(), progress: 0, target: number, createdAt: new Date() };
-      const result = await addDoc(collection(db, "users", uid, "goals"), item);
-      setGoals(current => [...current, { ...item, id: result.id }]);
-      setNewGoal(""); setTarget("");
+  function update(goal, changes) {
+    return mutate(async account => {
+      const patch = { ...changes, updatedAt: new Date() };
+      await updateDoc(doc(db, "users", account, "goals", goal.id), patch);
+      if (auth.currentUser?.uid === account) setGoals(current => current.map(item => item.id === goal.id ? { ...item, ...patch } : item));
     });
   }
-  function changeProgress(goal, value) {
-    const number = Number(value);
-    if (value === "" || !Number.isFinite(number) || number < 0 || number > goal.target) {
-      setError(`Enter progress between 0 and ${goal.target}.`); return;
+  async function save(details) {
+    if (editing?.id) {
+      if (await update(editing, details)) setEditing(null);
+    } else {
+      const saved = await mutate(async account => {
+        const item = { ...details, status: "active", createdAt: new Date(), updatedAt: new Date() };
+        const result = await addDoc(collection(db, "users", account, "goals"), item);
+        if (auth.currentUser?.uid === account) setGoals(current => [...current, { ...item, id: result.id }]);
+      });
+      if (saved) setEditing(null);
     }
-    mutate(async uid => {
-      await updateDoc(doc(db, "users", uid, "goals", goal.id), { progress: number });
-      setGoals(current => current.map(item => item.id === goal.id ? { ...item, progress: number } : item));
-      setEditingId(null);
-    });
   }
-  return <section className="panel p-5 sm:p-6" aria-busy={loading || pending}>
-    <h2><button type="button" onClick={() => setExpanded(value => !value)} aria-expanded={expanded} aria-controls="mini-goals" className="flex w-full items-center justify-between text-left text-[15px] font-semibold text-white">Mini goals<ChevronDown size={17} className={`text-gray-500 ${expanded ? "rotate-180" : ""}`} /></button></h2>
-    <p className="mt-1 text-xs leading-5 text-gray-400">Turn a bigger ambition into measurable steps.</p>
-    {error && <p role="alert" className="mt-3 text-xs text-red-300">{error}</p>}
-    {expanded && <div id="mini-goals" className="mt-5 space-y-4">
-      {loading ? <p role="status" className="text-sm text-gray-400">Loading goals…</p> : !goals.length ? <p className="text-sm leading-6 text-gray-400">Start small. Name a goal and set a target to track.</p> : <ul className="grid gap-3 sm:grid-cols-2">{goals.map(goal => {
-        const progress = Number(goal.progress) || 0;
-        const goalTarget = Number(goal.target);
-        const percent = goalTarget > 0 ? Math.max(0, Math.min(progress / goalTarget * 100, 100)) : 0;
-        return <li key={goal.id} className="min-w-0 rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-          <div className="flex items-start justify-between gap-2"><h3 className="break-words text-sm font-medium leading-6 text-gray-200">{goal.name}</h3><button type="button" aria-label={`Delete goal: ${goal.name}`} disabled={pending} onClick={() => { if (window.confirm(`Delete "${goal.name}" and its progress?`)) mutate(async uid => { await deleteDoc(doc(db, "users", uid, "goals", goal.id)); setGoals(current => current.filter(item => item.id !== goal.id)); if (editingId === goal.id) setEditingId(null); }); }} className="flex h-7 w-7 shrink-0 items-center justify-center text-gray-500 hover:text-red-300 disabled:opacity-40"><Trash2 size={14} /></button></div>
-          <div className="my-3 flex items-center justify-between gap-3 text-xs"><span className={percent >= 100 ? "text-emerald-300" : "text-gray-400"}>{percent >= 100 ? "Complete" : "In progress"}</span><span className="tabular-nums text-[#d4c17a]">{progress} / {goal.target}</span></div>
-          <progress aria-label={`${goal.name} progress`} value={percent} max={100} className="h-1.5 w-full accent-[#d4c17a]" />
-          {editingId === goal.id ? <form onSubmit={event => { event.preventDefault(); changeProgress(goal, tempProgress); }} className="mt-4 flex gap-2"><input aria-label={`Progress for ${goal.name}`} type="number" min="0" max={goal.target} step="any" required value={tempProgress} onChange={event => setTempProgress(event.target.value)} disabled={pending} className={`${field} w-full flex-1`} /><button type="submit" aria-label="Save goal progress" disabled={pending} className={iconButton}><Check size={15} /></button><button type="button" aria-label="Cancel editing goal" disabled={pending} onClick={() => setEditingId(null)} className={iconButton}><X size={15} /></button></form> : <div className="mt-4 flex items-center gap-2"><button type="button" aria-label={`Decrease ${goal.name} progress by one`} disabled={pending || progress <= 0 || goalTarget <= 0} onClick={() => changeProgress(goal, Math.max(0, progress - 1))} className={iconButton}><Minus size={15} /></button><button type="button" aria-label={`Increase ${goal.name} progress by one`} disabled={pending || progress >= goalTarget || goalTarget <= 0} onClick={() => changeProgress(goal, Math.min(goalTarget, progress + 1))} className={iconButton}><Plus size={15} /></button><button type="button" aria-label={`Edit ${goal.name} progress`} disabled={pending} onClick={() => { setEditingId(goal.id); setTempProgress(String(progress)); }} className="ml-auto flex min-h-10 items-center gap-2 rounded-lg px-2 text-xs text-gray-400 hover:text-[#d4c17a] disabled:opacity-40"><Edit2 size={13} />Edit</button></div>}
-        </li>;
-      })}</ul>}
-      <form onSubmit={add} className="flex flex-wrap gap-2"><input aria-label="New goal name" required value={newGoal} onChange={event => setNewGoal(event.target.value)} disabled={loading || pending} placeholder="Name your next goal" className={`${field} flex-1 basis-36`} /><input aria-label="Goal target, greater than zero" type="number" required min="0.00000001" step="any" value={target} onChange={event => setTarget(event.target.value)} disabled={loading || pending} placeholder="Target" className={`${field} w-24`} /><button type="submit" aria-label="Add goal" disabled={loading || pending} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#d4c17a] text-black disabled:opacity-40"><Plus size={18} /></button></form>
-      {pending && <p role="status" className="text-xs text-gray-400">Saving goal…</p>}
-    </div>}
+  const visibleGoals = goals.filter(goal => showArchived || !goal.archived);
+  return <section className="panel goals-panel" aria-labelledby="goals-title" aria-busy={loading || pending}>
+    <div className="section-heading"><div><h2 id="goals-title">Goals</h2><p>A direction that matters to you. A next step you can take.</p></div><button type="button" className="button-secondary" disabled={loading || pending || !uid} onClick={() => { setError(""); setEditing({}); }}><Plus size={16} />Add goal</button></div>
+    {error && !editing && <div role="alert" className="status-error"><span>{error}</span><button type="button" className="button-secondary" disabled={pending} onClick={() => setAttempt(value => value + 1)}>Try again</button></div>}
+    {loading ? <p role="status" className="py-6 text-sm text-gray-400">Loading your goals…</p> : !uid ? <p className="text-sm text-gray-400">Sign in to keep your goals here.</p> : !visibleGoals.length ? <div className="empty-state"><span className="empty-icon"><Flag size={22} /></span><h3>{goals.length ? "Your goals are archived" : "Make room for what matters"}</h3><p>{goals.length ? "Show archived goals to revisit them, or start a new one." : "Write what you're trying to achieve. You can figure out the details as you go."}</p><button type="button" className="button-secondary" onClick={() => { setError(""); setEditing({}); }}>Write a goal</button></div> : <ul className="grid gap-4 md:grid-cols-2">{visibleGoals.map(goal => {
+      const achieved = statusOf(goal) === "achieved";
+      const legacy = Number(goal.target) > 0;
+      return <li key={goal.id} className="rounded-xl border border-white/[0.08] bg-white/[0.015] p-5">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><span className={`text-[10px] font-semibold uppercase tracking-wider ${achieved ? "text-emerald-300" : "text-gold"}`}>{goal.archived ? "Archived" : achieved ? "Achieved" : "Active goal"}</span>{goal.targetDate && <time dateTime={goal.targetDate} className="text-xs text-gray-400">By {new Date(`${goal.targetDate}T12:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</time>}</div>
+        <h3 className="whitespace-pre-wrap break-words text-base font-semibold leading-7 text-white">{titleOf(goal)}</h3>
+        {goal.why && <div className="mt-4"><p className="text-[10px] uppercase tracking-wider text-gray-500">Why it matters</p><p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-gray-300">{goal.why}</p></div>}
+        {goal.nextAction && <div className="mt-4 rounded-lg bg-[#d4c17a]/5 p-3"><p className="text-[10px] uppercase tracking-wider text-gold">Next small action</p><p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-gray-200">{goal.nextAction}</p></div>}
+        {legacy && <p className="mt-4 text-xs text-gray-400">Existing tracked progress: <span className="text-gray-200">{goal.progress ?? 0} / {goal.target}</span></p>}
+        <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-white/[0.06] pt-4">
+          {!goal.archived && <button type="button" disabled={pending} onClick={() => update(goal, { status: achieved ? "active" : "achieved" })} className="button-secondary">{achieved ? <RotateCcw size={14} /> : <Check size={14} />}{achieved ? "Reopen" : "Mark achieved"}</button>}
+          <button type="button" className="icon-button" disabled={pending} aria-label={`Edit goal: ${titleOf(goal)}`} onClick={() => { setError(""); setEditing(goal); }}><Pencil size={15} /></button>
+          <button type="button" className="icon-button" disabled={pending} aria-label={`${goal.archived ? "Restore" : "Archive"} goal: ${titleOf(goal)}`} onClick={() => update(goal, { archived: !goal.archived })}>{goal.archived ? <RotateCcw size={15} /> : <Archive size={15} />}</button>
+          <button type="button" className="icon-button destructive ml-auto" disabled={pending} aria-label={`Delete goal: ${titleOf(goal)}`} onClick={() => { if (window.confirm(`Delete "${titleOf(goal)}"? This cannot be undone.`)) mutate(async account => { await deleteDoc(doc(db, "users", account, "goals", goal.id)); if (auth.currentUser?.uid === account) setGoals(current => current.filter(item => item.id !== goal.id)); }); }}><Trash2 size={15} /></button>
+        </div>
+      </li>;
+    })}</ul>}
+    {goals.some(goal => goal.archived) && <button type="button" className="mt-5 text-xs text-gray-400 hover:text-white" aria-pressed={showArchived} onClick={() => setShowArchived(value => !value)}>{showArchived ? "Hide archived goals" : `Show archived goals (${goals.filter(goal => goal.archived).length})`}</button>}
+    {pending && <p role="status" className="mt-4 text-xs text-gold">Saving your goal…</p>}
+    {editing && <GoalForm key={`${uid}-${editing.id || "new"}`} goal={editing.id ? editing : null} onClose={() => setEditing(null)} onSave={save} pending={pending} error={error} />}
   </section>;
 }

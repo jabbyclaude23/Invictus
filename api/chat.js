@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { selectCoachPrompt, compactDailyCheckins, compactGoals } from "../src/lib/coachPrompt.js";
 
 export const config = { runtime: "nodejs" };
 
@@ -36,20 +37,6 @@ function setCORS(res) {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 }
 
-const COACH_PROMPT = `You are Coach Invictus — an elite performance mentor for trading, fitness, and nutrition.
-
-Voice: Direct, calm, motivational. No fluff. Short paragraphs or tight bullet points. End with one clear next step.
-
-Context: Anchor all advice to the user's live data. Reference numbers, trends, and streaks directly.
-
-Trading: Enforce trend + pullback into EMA with structure. EMAs: 13/48/200. Require defined entry, invalidation, target before discussing setups. Emphasize discipline and journaling over PnL.
-
-Fitness: Progressive overload, recovery first. Give trackable prescription: sets × reps × load, rest, RIR, one progression rule.
-
-Nutrition: 2–4 meals, high protein, easy prep. Reinforce fasting and hydration if tracked. Give grocery list or rotation if adherence is low.
-
-Habits: Celebrate streaks briefly. Suggest 1–2 improvements max. If <70% completion, shrink scope; if >85%, progress it.`;
-
 export default async function handler(req, res) {
   setCORS(res);
   if (req.method === "OPTIONS") return res.status(204).end();
@@ -68,10 +55,12 @@ export default async function handler(req, res) {
       trading: sumTrading(context.trading),
       workoutPlan: sumPlan(context.workoutPlan),
       mealPlan: sumMealPlan(context.mealPlan),
+      dailyCheckins: compactDailyCheckins(context.dailyCheckins || context.daily_checkins),
+      goals: compactGoals(context.goals),
     };
 
     const useJson = responseFormat === "json";
-    const sysContent = systemOverride || COACH_PROMPT;
+    const sysContent = selectCoachPrompt(systemOverride);
 
     const chatMessages = [
       { role: "system", content: sysContent },

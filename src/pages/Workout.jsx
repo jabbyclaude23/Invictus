@@ -1,3 +1,4 @@
+import ExercisePreview from '../components/ExercisePreview';
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Dumbbell, Play, RotateCcw, CheckCircle, ChevronDown, ChevronUp, RefreshCw, Send, Loader2 } from "lucide-react";
@@ -635,10 +636,11 @@ export default function Workout() {
                                 {/* Clickable exercise row → opens detail modal */}
                                 <button
                                   onClick={() => setDetailExercise({ ...activeEx, muscle, dayIdx: i })}
-                                  className="flex-1 flex items-center justify-between py-2 px-2 rounded-xl hover:bg-white/5 transition text-left"
+                                  className="min-w-0 flex-1 flex items-center justify-between py-2 px-1 rounded-xl hover:bg-white/5 transition text-left"
                                 >
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    <span className={`text-sm ${isSwapped ? "text-blue-300" : "text-gray-300"} truncate`}>
+                                  <div className="flex items-center gap-3 min-w-0">
+                                    <ExercisePreview exercise={activeEx} />
+                                    <span className={`text-sm leading-5 break-words ${isSwapped ? "text-blue-300" : "text-gray-300"}`}>
                                       {activeEx.name}
                                     </span>
                                     {isSwapped && (

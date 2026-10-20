@@ -12,3 +12,5 @@ Captured from the actual React screens using the separate local fixture configur
 | Authentication | [View](auth-1440.png) | [View](auth-375.png) |
 
 Run `npm run preview:fixtures` from the repository root to explore the same screens locally. See the main README for reproducible validation commands and the remaining live-service smoke tests.
+
+The daily-focus iteration also has full-page [desktop](dashboard-updated-desktop.png) and [phone](dashboard-updated-mobile.png) captures showing the complete ordering through Goals.

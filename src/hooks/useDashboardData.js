@@ -31,7 +31,7 @@ export default function useDashboardData() {
         const ref = doc(db, 'users', user.uid, 'stats', item.id, 'history', key);
         const existing = await getDoc(ref);
         if (!existing.exists()) {
-          snapshotBatch.set(ref, { date: key, value: item.data().value ?? 0 });
+          snapshotBatch.set(ref, { date: key, value: item.data().value ?? 0, unit:item.data().unit || '' });
           snapshotsToSave += 1;
         }
       }));
@@ -81,14 +81,16 @@ export default function useDashboardData() {
     });
   };
 
-  const updateStat = (id, value) => mutate(async () => {
+  const updateStat = (id, value, details = {}) => mutate(async () => {
     if (!Number.isFinite(value)) throw new Error('Invalid value');
+    const metadata = { ...(details.unit !== undefined ? { unit:String(details.unit).trim().slice(0,24) } : {}), ...(details.target !== undefined ? { target:details.target } : {}), ...(details.direction ? { direction:details.direction } : {}) };
+    if(metadata.target != null && !Number.isFinite(metadata.target)) throw new Error('Invalid target');
     const batch = writeBatch(db);
     const key = legacyHabitDayKey();
-    batch.set(doc(db, 'users', user.uid, 'stats', id), { value, updatedAt: new Date() }, { merge: true });
-    batch.set(doc(db, 'users', user.uid, 'stats', id, 'history', key), { date: key, value }, { merge: true });
+    batch.set(doc(db, 'users', user.uid, 'stats', id), { value, ...metadata, updatedAt: new Date() }, { merge: true });
+    batch.set(doc(db, 'users', user.uid, 'stats', id, 'history', key), { date: key, value, unit:details.unit ?? stats.find(stat => stat.id === id)?.unit ?? '' }, { merge: true });
     await batch.commit();
-    setStats(rows => rows.map(s => s.id === id ? { ...s, value } : s));
+    setStats(rows => rows.map(s => s.id === id ? { ...s, value, ...metadata } : s));
   });
 
   const remove = (kind, id) => {

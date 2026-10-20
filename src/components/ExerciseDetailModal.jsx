@@ -1,3 +1,5 @@
+import ExercisePreview from './ExercisePreview';
+import useExerciseMedia from '../hooks/useExerciseMedia';
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, TrendingUp, ChevronDown, ChevronUp } from "lucide-react";
@@ -7,75 +9,9 @@ import { collection, getDocs } from "firebase/firestore";
 import useDialog from "../hooks/useDialog";
 import { EXERCISES, MUSCLE_COLORS, MUSCLE_BG, getSameMuscleAlts } from "../data/exercises";
 
-// ── Data fetcher: ExerciseDB (search → detail) → wger fallback ──────────────
-const INFO_CACHE = {};
-async function fetchExerciseInfo(name) {
-  if (INFO_CACHE[name] !== undefined) return INFO_CACHE[name];
-  const lc = name.toLowerCase();
-
-  // 1. Search by name, then fetch detail for video + instructions
-  try {
-    const r = await fetch(`/api/exercisedb?type=name&q=${encodeURIComponent(name)}&limit=10`);
-    if (r.ok) {
-      const json = await r.json();
-      const data = json.data || [];
-      if (data.length) {
-        // Prefer exact name, then partial match, then first result
-        const match =
-          data.find(e => e.name?.toLowerCase() === lc) ||
-          data.find(e => e.name?.toLowerCase().includes(lc)) ||
-          data.find(e => lc.includes(e.name?.toLowerCase())) ||
-          data[0];
-
-        // Fetch the detail record to get videoUrl + instructions
-        const dr = await fetch(`/api/exercisedb?type=detail&id=${match.exerciseId}`);
-        if (dr.ok) {
-          const dj = await dr.json();
-          const d  = dj.data || {};
-          INFO_CACHE[name] = {
-            video:        d.videoUrl || null,
-            img:          d.imageUrl || match.imageUrl || null,
-            instructions: Array.isArray(d.instructions) ? d.instructions : [],
-            desc:         d.overview  || null,
-            equipment:    (d.equipments || match.equipments || [])[0] || null,
-          };
-          return INFO_CACHE[name];
-        }
-
-        // Detail fetch failed — use search-level data
-        INFO_CACHE[name] = {
-          video: null, img: match.imageUrl || null,
-          instructions: [], desc: null,
-          equipment: (match.equipments || [])[0] || null,
-        };
-        return INFO_CACHE[name];
-      }
-    }
-  } catch { /* Try the fallback exercise source below. */ }
-
-  // 2. Fall back to wger (static image + HTML description)
-  try {
-    const r1 = await fetch(`https://wger.de/api/v2/exercise/?format=json&language=2&name=${encodeURIComponent(name)}`);
-    const d1 = await r1.json();
-    const id = d1?.results?.[0]?.id;
-    if (!id) throw new Error("no id");
-    const r2 = await fetch(`https://wger.de/api/v2/exerciseinfo/${id}/?format=json`);
-    const d2 = await r2.json();
-    const img  = d2?.images?.[0]?.image || null;
-    const raw  = d2?.translations?.find(t => t.language === 2)?.description || "";
-    const desc = raw.replace(/<[^>]+>/g, "").trim();
-    INFO_CACHE[name] = { video: null, img, instructions: [], desc, equipment: null };
-    return INFO_CACHE[name];
-  } catch {
-    INFO_CACHE[name] = null;
-    return null;
-  }
-}
-
 // ── Component ────────────────────────────────────────────────────────────────
 export default function ExerciseDetailModal({ exercise, onClose, onSwap, onLog }) {
-  const [info,       setInfo]       = useState(null);
-  const [infoLoading,setInfoLoading]= useState(true);
+  const {media:info,loading:infoLoading,retry:retryMedia}=useExerciseMedia(exercise);
   const [history,    setHistory]    = useState([]);
   const [histLoaded, setHistLoaded] = useState(false);
   const [historyError, setHistoryError] = useState("");
@@ -101,16 +37,10 @@ export default function ExerciseDetailModal({ exercise, onClose, onSwap, onLog }
   useEffect(() => {
     if (!exercise?.name) return;
     let active = true;
-    setInfo(null); setInfoLoading(true);
     setHistory([]); setHistLoaded(false); setHistoryError("");
     setShowSwap(false); setSwapFilter("");
     setSets(Array.from({ length: exercise?.sets || 1 }, () => ({ reps: "", weight: "" })));
     setLogDone(false); setLoggedSets([]);
-
-    fetchExerciseInfo(exercise.name)
-      .then(data => { if (active) setInfo(data); })
-      .catch(() => { if (active) setInfo(null); })
-      .finally(() => { if (active) setInfoLoading(false); });
 
     const u = auth.currentUser;
     if (!u) {
@@ -149,8 +79,6 @@ export default function ExerciseDetailModal({ exercise, onClose, onSwap, onLog }
 
   if (!exercise) return null;
 
-  const heroVideo = info?.video || null;
-  const heroImg   = info?.img   || null;
   const instructions = info?.instructions?.length ? info.instructions : (info?.desc ? [info.desc] : (libEntry?.desc ? [libEntry.desc] : []));
 
   return (
@@ -192,33 +120,8 @@ export default function ExerciseDetailModal({ exercise, onClose, onSwap, onLog }
 
         <div className="px-4 pb-32 max-w-lg mx-auto w-full space-y-4 pt-4">
 
-          {/* Hero: video (MP4) → image → placeholder */}
-          {infoLoading ? (
-            <div className="w-full h-52 rounded-2xl bg-[#111] flex items-center justify-center">
-              <div className="w-5 h-5 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
-            </div>
-          ) : heroVideo ? (
-            <div className="w-full h-52 rounded-2xl overflow-hidden bg-[#111]">
-              <video
-                src={heroVideo}
-                autoPlay
-                loop
-                muted
-                playsInline
-                className="w-full h-full object-cover"
-              />
-            </div>
-          ) : heroImg ? (
-            <div className="w-full h-52 rounded-2xl overflow-hidden bg-[#111]">
-              <img src={heroImg} alt={exercise.name} className="w-full h-full object-cover" />
-            </div>
-          ) : (
-            <div className={`w-full h-24 rounded-2xl bg-gradient-to-br ${MUSCLE_COLORS[muscle] ? "from-[#1a1a1a]" : "from-[#111]"} to-[#0a0a0a] flex items-center justify-center`}>
-              <span className="text-4xl opacity-40">
-                {muscle === "chest" ? "🏋️" : muscle === "back" ? "🦾" : muscle === "legs" ? "🦵" : muscle === "shoulders" ? "🎯" : muscle === "arms" ? "💪" : muscle === "core" ? "⚡" : "🏃"}
-              </span>
-            </div>
-          )}
+          <ExercisePreview exercise={exercise} large media={info} loading={infoLoading} />
+          {!infoLoading && !info && <button type="button" className="button-secondary" onClick={retryMedia}>Retry exercise demonstration</button>}
 
           {/* Name + plan details */}
           <div>

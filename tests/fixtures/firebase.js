@@ -76,7 +76,7 @@ export async function getDoc(reference) { if (window.__fixture.failReads) throw 
 export const getDocs = getDoc;
 export function onSnapshot(reference, ...args) {
   const callbacks = args.filter(argument => typeof argument === 'function');
-  let live = true; let last;
+  let live = true; let last = Symbol('first snapshot');
   const emit = () => {
     if (!live) return;
     if (window.__fixture.failReads) { callbacks[1]?.(new Error('Local fixture: forced read failure')); return; }

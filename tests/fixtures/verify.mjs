@@ -41,3 +41,9 @@ assert.equal((await reloaded.getDoc(session)).data().title, 'Fixture verificatio
 window.__fixture.reset({ empty: true });
 assert.equal((await reloaded.getDocs(reloaded.collection(reloaded.db, ...base, 'habits'))).size, 0);
 console.log('Fixture verification passed: seeded plans/data, date filtering, ordering/limit, timestamps, atomic notifications, unsubscribe, failed writes, persisted reload, empty reset.');
+
+let missingObserved = false;
+const stopMissing = onSnapshot(doc(db, ...base, 'daily_checkins', 'missing-date'), snapshot => { missingObserved = !snapshot.exists(); });
+await new Promise(setImmediate);
+assert.equal(missingObserved,true);
+stopMissing();
