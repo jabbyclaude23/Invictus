@@ -208,3 +208,6 @@ h1.page-heading { display: block; margin: 0; font-size: clamp(25px, 2.8vw, 34px)
 @media(max-width:767px) { .dashboard-topline { grid-template-columns:1fr; gap:18px; margin-bottom:18px; } .quote-feature { min-height:0; } .quote-feature p { font-size:19px; } .performance-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; } .performance-metric { padding:13px; } .performance-metric > strong { font-size:24px; } }
 
 .dashboard-topline { align-items: stretch; }
+
+.daily-planner button { min-height: 44px; }
+.daily-planner :is(button, input, select, summary):focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }

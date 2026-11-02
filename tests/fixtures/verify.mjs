@@ -47,3 +47,26 @@ const stopMissing = onSnapshot(doc(db, ...base, 'daily_checkins', 'missing-date'
 await new Promise(setImmediate);
 assert.equal(missingObserved,true);
 stopMissing();
+
+const priority = doc(db, ...base, 'todos', 'transaction-priority');
+const dayPlan = doc(db, ...base, 'daily_checkins', today);
+await fixture.runTransaction(db, async transaction => {
+  await transaction.get(dayPlan);
+  transaction.set(priority, { text: 'One useful thing', done: false });
+  transaction.set(dayPlan, { taskIds: [priority.id], priorities: [{ text: 'One useful thing', done: false }] }, { merge: true });
+});
+assert.deepEqual((await getDoc(dayPlan)).data().taskIds, [priority.id]);
+window.__fixture.failWrites = true;
+await assert.rejects(fixture.runTransaction(db, async transaction => {
+  transaction.update(priority, { done: true });
+  transaction.delete(dayPlan);
+}));
+window.__fixture.failWrites = false;
+assert.equal((await getDoc(priority)).data().done, false);
+assert.equal((await getDoc(dayPlan)).exists(), true);
+await assert.rejects(fixture.runTransaction(db, async transaction => {
+  transaction.update(priority, { done: true });
+  await transaction.get(dayPlan);
+}), /read before writing/);
+assert.equal((await getDoc(priority)).data().done, false);
+console.log('Transaction fixture checks passed: atomic task/plan writes, failed writes leave both intact, and read-before-write ordering.');

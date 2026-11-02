@@ -57,9 +57,9 @@ export function PerformanceSnapshot() {
     ].map(({ label, value, unit, icon: Icon }) => <div key={label} className="performance-metric"><div className="flex items-center gap-2 text-xs text-gray-400"><Icon size={15} />{label}</div><strong>{value}</strong><span>{unit}</span></div>)}</div>
   </section>;
 }
-export default function DailyFocus({ focus }) {
+export default function DailyFocus({ focus, checkinOnly = false }) {
   return <section className="panel daily-focus-panel" aria-busy={focus.loading || focus.pending}>
     {focus.error && <div role="alert" className="status-error"><span>{focus.error}</span><button className="button-secondary" onClick={focus.retry}>Try again</button></div>}
-    {focus.loading ? <p role="status" className="text-sm text-gray-400">Loading your daily focus…</p> : <div className="daily-focus-grid"><Priorities key={`priorities-${focus.date}`} record={focus.data} pending={focus.pending} disabled={!focus.loaded} save={focus.save} /><Checkin key={`checkin-${focus.date}`} record={focus.data} pending={focus.pending} disabled={!focus.loaded} save={focus.save} /></div>}
+    {focus.loading ? <p role="status" className="text-sm text-gray-400">Loading your daily focus…</p> : <div className={checkinOnly ? '' : 'daily-focus-grid'}>{!checkinOnly && <Priorities key={`priorities-${focus.date}`} record={focus.data} pending={focus.pending} disabled={!focus.loaded} save={focus.save} />}<Checkin key={`checkin-${focus.date}`} record={focus.data} pending={focus.pending} disabled={!focus.loaded} save={focus.save} /></div>}
   </section>;
 }

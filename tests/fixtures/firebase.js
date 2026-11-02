@@ -99,6 +99,22 @@ export function writeBatch() {
   const batch = { set: (reference, value, options) => { operations.push(() => set(reference, value, options)); return batch; }, update: (reference, value) => { operations.push(() => set(reference, value, { merge: true })); return batch; }, delete: reference => { operations.push(() => delete records[reference.path]); return batch; }, commit: async () => { writeGuard(); operations.forEach(operation => operation()); changed(); } };
   return batch;
 }
+// This local double verifies ordering/atomicity; it does not simulate server contention.
+export async function runTransaction(_database, updateFunction) {
+  const operations = [];
+  const transaction = {
+    get: async reference => { if (operations.length) throw new Error('Transactions must read before writing'); return getDoc(reference); },
+    set: (reference, value, options) => { operations.push(() => set(reference, value, options)); return transaction; },
+    update: (reference, value) => { operations.push(() => { if (!records[reference.path]) throw new Error('Local fixture: missing document'); set(reference, value, { merge: true }); }); return transaction; },
+    delete: reference => { operations.push(() => delete records[reference.path]); return transaction; },
+  };
+  const result = await updateFunction(transaction);
+  writeGuard();
+  const previous = structuredClone(records);
+  try { operations.forEach(operation => operation()); } catch (error) { records = previous; throw error; }
+  changed();
+  return result;
+}
 export function getAuth() { return auth; }
 export function onAuthStateChanged(_auth, callback) { authListeners.add(callback); let live = true; queueMicrotask(() => { if (live) callback(auth.currentUser); }); return () => { live = false; authListeners.delete(callback); }; }
 function setUser(user) { auth.currentUser = user; sessionStorage.setItem('invictus-preview-signedout', user ? '0' : '1'); authListeners.forEach(callback => callback(user)); }

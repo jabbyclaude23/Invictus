@@ -43,11 +43,13 @@ export default function Dashboard() {
 
       {data.error && <div className="status-error" role="alert"><span>{data.error}</span><button className="button-secondary" onClick={data.reload}>Try again</button></div>}
 
+      <div id="daily-focus"><TodoList /></div>
+
       <div className="dashboard-topline">
         {quote && <blockquote className="quote-feature panel"><span>ONE THOUGHT FOR TODAY</span><p>“{quote}”</p><a href="#daily-focus" className="button-secondary">Give today a direction <ArrowRight size={14} /></a></blockquote>}
         <ScheduleTab />
       </div>
-      <div id="daily-focus"><DailyFocus focus={focus} /></div>
+      <DailyFocus focus={focus} checkinOnly />
       <PerformanceSnapshot />
 
       <div className="journey-grid">
@@ -69,7 +71,6 @@ export default function Dashboard() {
               </> : <div className="empty-state"><span className="empty-icon"><Check size={24} /></span><h3>Your routine starts here</h3><p>Add the habits you want to make part of your day.</p><button className="button-secondary" onClick={() => setModal('habit')}><Plus size={16} /> Create your first habit</button></div>}
               {data.pending && <p role="status" className="text-xs text-gold mt-3">Saving your progress…</p>}
             </section>
-            <TodoList />
 
           </div>
           <aside className="dashboard-secondary" aria-label="Schedule and progress">
