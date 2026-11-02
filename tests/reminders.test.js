@@ -2,7 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { validSubscription, deliverOnce } from '../server/reminderDelivery.js';
 import handler from '../api/reminders.js';
+import {spawnSync} from 'node:child_process';
+import process from 'node:process';
 const subscription={endpoint:'https://fcm.googleapis.com/fcm/send/example',keys:{p256dh:'a'.repeat(87),auth:'a'.repeat(22)}};
+test('server dependencies load on runtimes without CommonJS require(ESM) support',()=>{
+  const script='await import('+JSON.stringify(new URL('../api/reminders.js',import.meta.url).href)+');';
+  const result=spawnSync(process.execPath,['--no-experimental-require-module','--input-type=module','-e',script],{encoding:'utf8',timeout:15000});
+  assert.equal(result.status,0,result.stderr);
+});
 test('push registration allows trusted services and rejects SSRF endpoints',()=>{
   assert.ok(validSubscription(subscription));
   for(const endpoint of ['http://fcm.googleapis.com/path','https://127.0.0.1/','https://fcm.googleapis.com.evil.test/','https://user:password@fcm.googleapis.com/path','https://fcm.googleapis.com:8443/path'])assert.equal(validSubscription({...subscription,endpoint}),false);
