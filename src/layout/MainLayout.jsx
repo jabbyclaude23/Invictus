@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { MotionConfig } from "framer-motion";
-import { Dumbbell, Utensils, LineChart, MessageSquare, LayoutDashboard, ArrowUpRight } from "lucide-react";
+import { Dumbbell, Utensils, LineChart, MessageSquare, LayoutDashboard, ArrowUpRight, CalendarDays } from "lucide-react";
+import ReminderCenter from "../components/ReminderCenter";
 import { useEffect, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "../firebase";
@@ -8,11 +9,13 @@ import UserMenu from "../components/UserMenu";
 
 const tabs = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
+  { to: "/plan", icon: CalendarDays, label: "Plan" },
   { to: "/workout", icon: Dumbbell, label: "Workout" },
   { to: "/meals", icon: Utensils, label: "Meals" },
   { to: "/trading", icon: LineChart, label: "Trading" },
   { to: "/coach", icon: MessageSquare, label: "Coach" },
 ];
+const mobileTabs = tabs.filter(tab => tab.to !== '/plan');
 function Brand() {
   return <div className="flex items-center gap-3"><span aria-hidden="true" className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#d4c17a]/30 bg-[#d4c17a]/10 text-sm font-semibold text-[#d4c17a]">IV</span><div><span className="block text-sm font-semibold tracking-[0.22em] text-[#f4f6f8]">INVICTUS</span><span className="hidden text-[10px] tracking-[0.13em] text-[#7f8a99] lg:block">PERSONAL PERFORMANCE</span></div></div>;
 }
@@ -34,12 +37,13 @@ export default function MainLayout() {
     <div className="min-w-0 lg:ml-[232px]">
       <header className="app-topbar sticky top-0 z-30 flex h-[72px] items-center justify-between gap-4 border-b border-white/[0.07] bg-[#0d1014]/95 px-5 backdrop-blur-xl sm:px-8 lg:h-20 lg:px-10">
         <div className="lg:hidden"><Brand /></div><div className="hidden items-center gap-3 text-sm lg:flex"><span className="text-[#748192]">Workspace</span><span className="text-[#485260]">/</span><span className="text-[#d9dfe7]">{current.label}</span></div>
-        <div className="flex items-center gap-5"><span className="hidden text-xs text-[#8491a2] sm:block">{date}</span>{user && <UserMenu user={user} />}</div>
+        <div className="flex items-center gap-5"><NavLink to="/plan" aria-label="Plan your day" className="icon-button lg:hidden"><CalendarDays size={21} /></NavLink><span className="hidden text-xs text-[#8491a2] sm:block">{date}</span>{user && <UserMenu user={user} />}</div>
       </header>
       <main id="main-content" tabIndex={-1} className="app-content min-w-0 pb-[calc(76px+env(safe-area-inset-bottom))] outline-none lg:pb-0"><Outlet /></main>
+      <ReminderCenter />
     </div>
     <nav aria-label="Mobile navigation" className="app-bottom-nav fixed inset-x-0 bottom-0 z-40 flex border-t border-white/[0.08] bg-[#101419]/95 px-2 pt-2 backdrop-blur-xl lg:hidden" style={{ paddingBottom: "calc(8px + env(safe-area-inset-bottom))", minHeight: "calc(76px + env(safe-area-inset-bottom))" }}>
-      {tabs.map(({ to, icon: Icon, label }) => <NavLink key={to} to={to} end={to === "/"} className={({ isActive }) => `flex min-h-[52px] min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl text-[10px] font-medium transition-colors ${isActive ? "bg-[#d4c17a]/[0.07] text-[#d4c17a]" : "text-[#8491a2] hover:text-[#f4f6f8]"}`}><Icon size={20} strokeWidth={1.7} /><span>{label}</span></NavLink>)}
+      {mobileTabs.map(({ to, icon: Icon, label }) => <NavLink key={to} to={to} end={to === "/"} className={({ isActive }) => `flex min-h-[52px] min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl text-[10px] font-medium transition-colors ${isActive ? "bg-[#d4c17a]/[0.07] text-[#d4c17a]" : "text-[#8491a2] hover:text-[#f4f6f8]"}`}><Icon size={20} strokeWidth={1.7} /><span>{label}</span></NavLink>)}
     </nav>
   </div></MotionConfig>;
 }

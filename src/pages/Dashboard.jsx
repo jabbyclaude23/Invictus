@@ -44,6 +44,7 @@ export default function Dashboard() {
       {data.error && <div className="status-error" role="alert"><span>{data.error}</span><button className="button-secondary" onClick={data.reload}>Try again</button></div>}
 
       <div id="daily-focus"><TodoList /></div>
+      <Link to="/plan" className="button-secondary mb-6"><ArrowUpRight size={16} />Schedule tasks, build goal plans & set prayer reminders</Link>
 
       <div className="dashboard-topline">
         {quote && <blockquote className="quote-feature panel"><span>ONE THOUGHT FOR TODAY</span><p>“{quote}”</p><a href="#daily-focus" className="button-secondary">Give today a direction <ArrowRight size={14} /></a></blockquote>}

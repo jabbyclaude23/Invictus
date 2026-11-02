@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const fixtureFirebase = resolve(root, 'tests/fixtures/firebase.js');
-const routes = new Set(['/', '/auth', '/workout', '/meals', '/trading', '/coach']);
+const routes = new Set(['/', '/plan', '/auth', '/workout', '/meals', '/trading', '/coach']);
 export default defineConfig({
   root,
   plugins: [

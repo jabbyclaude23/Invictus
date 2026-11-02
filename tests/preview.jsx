@@ -10,6 +10,7 @@ import Workout from '../src/pages/Workout.jsx';
 import Meals from '../src/pages/Meals.jsx';
 import Trading from '../src/pages/Trading.jsx';
 import Coach from '../src/pages/Coach.jsx';
+import Plan from '../src/pages/Plan.jsx';
 import ProtectedRoute from '../src/components/ProtectedRoute.jsx';
 import { mealPlan, workoutPlan } from './fixtures/data.js';
 import './fixtures/firebase.js';
@@ -18,6 +19,7 @@ import '../src/index.css';
 const nativeFetch = window.fetch.bind(window);
 window.fetch = async (resource, options = {}) => {
   const url = new URL(resource instanceof Request ? resource.url : resource, location.origin);
+  if (url.pathname === '/api/reminders') return new Response(JSON.stringify({ready:false,publicKey:null}),{headers:{'Content-Type':'application/json'}});
   if (url.hostname === 'wger.de') return new Response(JSON.stringify({ results: [] }), { headers: { 'Content-Type': 'application/json' } });
   if (url.pathname === '/api/exercisedb') {
     const data = url.searchParams.get('type') === 'detail'
@@ -34,7 +36,7 @@ window.fetch = async (resource, options = {}) => {
     if (payload.topic === 'trading') reply = 'You waited for confirmation and respected your planned risk. Review whether the entry matched your written setup. For your next session, record the intended stop before entering and compare execution against the plan.';
     if (payload.topic === 'plan_generation') {
       const instruction = payload.systemOverride || '';
-      const result = instruction.includes('Estimate the macros') ? { calories: 540, protein: 42, carbs: 60, fat: 15 } : /nutritionist|meal plan/i.test(instruction) ? mealPlan : workoutPlan;
+      const result = instruction.includes('"milestones"') ? {milestones:[{title:'Finish the first useful step this week',tasks:[{text:'Draft an outline of the work',estimateMinutes:25},{text:'Complete and review the first section',estimateMinutes:45}]}]} : instruction.includes('Estimate the macros') ? { calories: 540, protein: 42, carbs: 60, fat: 15 } : /nutritionist|meal plan/i.test(instruction) ? mealPlan : workoutPlan;
       reply = JSON.stringify(result);
     }
     return new Response(JSON.stringify({ reply }), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -50,6 +52,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <Routes>
           <Route path="/" element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
             <Route index element={<Dashboard />} />
+            <Route path="plan" element={<Plan />} />
             <Route path="workout" element={<Workout />} />
             <Route path="meals" element={<Meals />} />
             <Route path="trading" element={<Trading />} />

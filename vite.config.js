@@ -8,6 +8,7 @@ export default defineConfig({
     VitePWA({
       registerType: "autoUpdate",
       workbox: {
+        importScripts: ['/push-events.js'],
         skipWaiting: true,
         clientsClaim: true,
       },

@@ -3,6 +3,7 @@ import { Plus, Pencil, Archive, Trash2, Check, RotateCcw, X, Flag } from "lucide
 import { collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, orderBy } from "firebase/firestore";
 import { db, auth } from "../firebase";
 import useDialog from "../hooks/useDialog";
+import GoalProject from "./GoalProject";
 
 const field = "mt-2 w-full rounded-xl border border-white/10 bg-[#101419] px-3 py-3 text-sm text-white";
 const titleOf = goal => goal.name || goal.title || "Untitled goal";
@@ -97,6 +98,7 @@ export default function GoalTracker() {
         {goal.why && <div className="mt-4"><p className="text-[10px] uppercase tracking-wider text-gray-500">Why it matters</p><p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-gray-300">{goal.why}</p></div>}
         {goal.nextAction && <div className="mt-4 rounded-lg bg-[#d4c17a]/5 p-3"><p className="text-[10px] uppercase tracking-wider text-gold">Next small action</p><p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-gray-200">{goal.nextAction}</p></div>}
         {legacy && <p className="mt-4 text-xs text-gray-400">Existing tracked progress: <span className="text-gray-200">{goal.progress ?? 0} / {goal.target}</span></p>}
+        {!goal.archived && <GoalProject goal={goal} onChange={() => setAttempt(value => value + 1)} />}
         <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-white/[0.06] pt-4">
           {!goal.archived && <button type="button" disabled={pending} onClick={() => update(goal, { status: achieved ? "active" : "achieved" })} className="button-secondary">{achieved ? <RotateCcw size={14} /> : <Check size={14} />}{achieved ? "Reopen" : "Mark achieved"}</button>}
           <button type="button" className="icon-button" disabled={pending} aria-label={`Edit goal: ${titleOf(goal)}`} onClick={() => { setError(""); setEditing(goal); }}><Pencil size={15} /></button>

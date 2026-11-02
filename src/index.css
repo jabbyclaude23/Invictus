@@ -208,6 +208,21 @@ h1.page-heading { display: block; margin: 0; font-size: clamp(25px, 2.8vw, 34px)
 @media(max-width:767px) { .dashboard-topline { grid-template-columns:1fr; gap:18px; margin-bottom:18px; } .quote-feature { min-height:0; } .quote-feature p { font-size:19px; } .performance-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; } .performance-metric { padding:13px; } .performance-metric > strong { font-size:24px; } }
 
 .dashboard-topline { align-items: stretch; }
+.planning-tabs { display:flex; gap:8px; overflow-x:auto; margin-bottom:24px; padding:4px; }
+.planning-tabs button { display:flex; min-height:44px; align-items:center; justify-content:center; gap:8px; border-radius:10px; border:1px solid var(--line); padding:10px 16px; color:var(--muted); font-size:13px; flex-shrink:0; }
+.planning-tabs button.selected { color:var(--gold); border-color:#d4c17a55; background:#d4c17a0a; }
+.planning-form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+.planning-form-grid label { display:block; font-size:12px; color:#b2bbc7; min-width:0; }
+.planning-field { display:block; min-height:44px; max-width:100%; width:100%; margin-top:6px; padding:10px 12px; border:1px solid #ffffff20; background:#101419; border-radius:10px; color:#f4f6f8; font-size:16px; }
+.planning-two-column { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:22px; align-items:start; }
+.schedule-block { border:1px solid var(--line); border-left:3px solid var(--gold); border-radius:10px; padding:14px; }
+.schedule-block.prayer-block { border-left-color:#91b99f; background:#91b99f08; }
+.reminder-banner { position:fixed; right:20px; bottom:calc(90px + env(safe-area-inset-bottom)); z-index:60; width:min(420px,calc(100vw - 40px)); max-height:70dvh; overflow:auto; padding:20px; border:1px solid #d4c17a55; border-radius:16px; background:#151a20; box-shadow:0 12px 48px #0008; }
+.planning-page :is(button,summary), .goals-panel summary { min-height:44px; }
+.planning-page :is(button,input,select,textarea,summary):focus-visible { outline:2px solid var(--gold); outline-offset:3px; }
+@media(max-width:1000px){ .planning-two-column { grid-template-columns:1fr; } }
+@media(max-width:500px){ .planning-form-grid { grid-template-columns:1fr; } .planning-tabs { gap:5px; } .planning-tabs button { padding:10px 12px; font-size:12px; } }
+@media(min-width:1024px){ .reminder-banner { bottom:24px; } }
 
 .daily-planner button { min-height: 44px; }
 .daily-planner :is(button, input, select, summary):focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }

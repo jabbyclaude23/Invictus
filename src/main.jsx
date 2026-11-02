@@ -13,6 +13,7 @@ const Workout = lazy(() => import("./pages/Workout"));
 const Meals = lazy(() => import("./pages/Meals"));
 const Trading = lazy(() => import("./pages/Trading"));
 const Coach = lazy(() => import("./pages/Coach"));
+const Plan = lazy(() => import("./pages/Plan"));
 import ProtectedRoute from "./components/ProtectedRoute";
 import { registerSW } from "virtual:pwa-register";
 import "./index.css";
@@ -32,6 +33,7 @@ const router = createBrowserRouter([
     ),
     children: [
       { path: "/", element: <Suspense fallback={<div className="dashboard-loading" role="status">Loading your workspace...</div>}><Dashboard /></Suspense> },
+      { path: "/plan", element: <Suspense fallback={<div className="dashboard-loading" role="status">Loading your plan...</div>}><Plan /></Suspense> },
       { path: "/workout", element: <Suspense fallback={<div className="dashboard-loading" role="status">Loading your workspace...</div>}><Workout /></Suspense> },
       { path: "/meals", element: <Suspense fallback={<div className="dashboard-loading" role="status">Loading your workspace...</div>}><Meals /></Suspense> },
       { path: "/trading", element: <Suspense fallback={<div className="dashboard-loading" role="status">Loading your workspace...</div>}><Trading /></Suspense> },

@@ -108,6 +108,7 @@ export default function DailyPlanner({
               </label>
               <div className="min-w-0 flex-1 py-2">
                 <p className={`break-words text-sm ${task.done ? "text-gray-400 line-through" : "text-gray-100"}`}>{task.text}</p>
+                {task.goalTitle && <p className="mt-1 break-words text-xs text-gold">{task.goalTitle}{task.milestoneTitle ? " · " + task.milestoneTitle : ""}</p>}
                 {!task.done && <p className="mt-1 text-xs text-gray-400">{session?.taskId === task.id ? "In focus" : index === daily.findIndex(item => !item.done) ? "Next priority" : "After that"}</p>}
               </div>
               {!task.done && <div className="flex shrink-0">
